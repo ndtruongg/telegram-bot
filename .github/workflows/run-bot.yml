@@ -2,6 +2,8 @@ name: Run Telegram Bot Hourly
 
 on:
   schedule:
+    # Chạy lúc 07:00 sáng giờ Việt Nam (00:00 UTC) để gửi bản tin sáng đúng giờ
+    - cron: "0 0 * * *"
     # Chạy mỗi tiếng 1 lần (dùng phút 17 để tránh delay vào đầu giờ :00)
     - cron: "17 * * * *"
   workflow_dispatch:
@@ -46,10 +48,19 @@ jobs:
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           LOG_LEVEL: ${{ vars.LOG_LEVEL }}
           GOLD_ENABLED: ${{ vars.GOLD_ENABLED }}
           GOLD_URL: ${{ vars.GOLD_URL }}
           GOLD_TARGET_PRICE: ${{ vars.GOLD_TARGET_PRICE }}
+          NEWS_ENABLED: ${{ vars.NEWS_ENABLED }}
+          NEWS_RSS_URLS: ${{ vars.NEWS_RSS_URLS }}
+          NEWS_SEND_HOUR: ${{ vars.NEWS_SEND_HOUR }}
+          NEWS_SEND_MINUTE: ${{ vars.NEWS_SEND_MINUTE }}
+          NEWS_TIMEZONE: ${{ vars.NEWS_TIMEZONE }}
+          NEWS_MAX_ARTICLES: ${{ vars.NEWS_MAX_ARTICLES }}
+          NEWS_MAX_HIGHLIGHTS: ${{ vars.NEWS_MAX_HIGHLIGHTS }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
           STATE_FILE: .bot_state.json
           INPUT_FEATURE: ${{ inputs.feature }}
         run: |

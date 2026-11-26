@@ -101,6 +101,10 @@ def process_webhook_request(
     )
     if result is not None:
         chat_id, reply_text = result
-        active_telegram.send_message(reply_text, chat_id=chat_id)
+        active_telegram.send_message(
+            reply_text,
+            chat_id=chat_id,
+            disable_web_page_preview=True,
+        )
 
     return 200, {"ok": True}

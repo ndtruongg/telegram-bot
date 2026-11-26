@@ -30,9 +30,13 @@ Bot Telegram được tổ chức theo kiến trúc module hóa, mỗi tính nă
 │   │   └── logger.py               # Cấu hình logging thống nhất
 │   ├── features/                   # Các tính năng của bot (mỗi tính năng 1 thư mục)
 │   │   ├── __init__.py             # Đăng ký danh sách tính năng được kích hoạt
-│   │   └── gold_price/             # Tính năng theo dõi giá vàng SJC
-│   │       ├── scraper.py          # Cào và phân tích dữ liệu HTML
-│   │       └── feature.py          # Logic kiểm tra ngưỡng giá & gửi cảnh báo
+│   │   ├── gold_price/             # Tính năng theo dõi giá vàng SJC
+│   │   │   ├── scraper.py          # Cào và phân tích dữ liệu HTML
+│   │   │   └── feature.py          # Logic kiểm tra ngưỡng giá & gửi cảnh báo
+│   │   └── morning_news/           # Tính năng tóm tắt tin tức buổi sáng
+│   │       ├── rss.py              # Lấy và gộp tin RSS (VnExpress, Tuổi Trẻ)
+│   │       ├── summarizer.py       # Tóm tắt tin bằng Gemini AI (kèm dự phòng RSS)
+│   │       └── feature.py          # Lập lịch gửi 07:00 sáng & lệnh /news_*
 │   └── utils/                      # Hàm tiện ích dùng chung
 │       └── parsers.py              # Parse & format giá tiền
 └── tests/
@@ -85,13 +89,18 @@ Repo đã có sẵn workflow [.github/workflows/run-bot.yml](.github/workflows/r
 
 Để kích hoạt sau khi `git push`:
 1. Vào **Settings → Secrets and variables → Actions** trên GitHub repo.
-2. Trong tab **Secrets**, thêm 2 secret bắt buộc:
-   - `TELEGRAM_TOKEN`
-   - `TELEGRAM_CHAT_ID`
+2. Trong tab **Secrets**, thêm các secret sau:
+   - `TELEGRAM_TOKEN` *(bắt buộc)*
+   - `TELEGRAM_CHAT_ID` *(bắt buộc)*
+   - `GEMINI_API_KEY` *(khuyến nghị — lấy miễn phí tại [Google AI Studio](https://aistudio.google.com/apikey) để tóm tắt bằng AI; nếu bỏ trống bot sẽ tự chuyển sang tóm tắt nhanh từ RSS)*
 3. (Tuỳ chọn) Trong tab **Variables**, thêm các biến cấu hình nếu muốn đổi so với mặc định:
    - `GOLD_TARGET_PRICE` (mặc định `13500000`)
    - `GOLD_ENABLED` (mặc định `true`)
    - `GOLD_URL` (mặc định `https://webgia.com/gia-vang/sjc/`)
+   - `NEWS_ENABLED` (mặc định `true`)
+   - `NEWS_RSS_URLS` (mặc định `https://vnexpress.net/rss/tin-noi-bat.rss,https://tuoitre.vn/rss/tin-moi-nhat.rss`)
+   - `NEWS_SEND_HOUR` / `NEWS_SEND_MINUTE` (mặc định `7` / `0` theo `Asia/Ho_Chi_Minh`)
+   - `GEMINI_MODEL` (mặc định `gemini-2.5-flash`)
    - `LOG_LEVEL` (mặc định `INFO`)
 4. Vào tab **Actions → Run Telegram Bot Hourly → Run workflow** để chạy thử ngay.
 
@@ -102,6 +111,8 @@ Bot hỗ trợ các lệnh phản hồi tức thì qua Webhook (Telegram chỉ c
 - `/gold_check`: Kiểm tra giá vàng hiện tại ngay lập tức.
 - `/gold_set <số tiền>`: Cập nhật `GOLD_TARGET_PRICE` lên **GitHub Repository Variable** (hỗ trợ cả `13450000` và `13.450.000`).
 - `/gold_status`: Xem mức giá mục tiêu hiện tại đang đồng bộ.
+- `/news_now`: Lấy và tóm tắt tin tức nổi bật ngay lập tức.
+- `/news_status`: Xem giờ gửi bản tin sáng, danh sách RSS và trạng thái Gemini AI.
 
 ### Cách triển khai Webhook (khuyến nghị Vercel — miễn phí)
 

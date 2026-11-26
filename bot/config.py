@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+
+DEFAULT_NEWS_RSS_URLS: tuple[str, ...] = (
+    "https://vnexpress.net/rss/tin-noi-bat.rss",
+    "https://tuoitre.vn/rss/tin-moi-nhat.rss",
+)
 
 
 def _load_dotenv(env_path: Path) -> None:
@@ -29,6 +34,11 @@ def _env(key: str, default: str) -> str:
     return value if value else default
 
 
+def _env_bool(key: str, default: bool) -> bool:
+    raw = _env(key, "true" if default else "false").lower()
+    return raw in {"1", "true", "yes", "on"}
+
+
 @dataclass(frozen=True)
 class GoldPriceConfig:
     enabled: bool
@@ -38,11 +48,26 @@ class GoldPriceConfig:
 
 
 @dataclass(frozen=True)
+class MorningNewsConfig:
+    enabled: bool = True
+    rss_urls: tuple[str, ...] = DEFAULT_NEWS_RSS_URLS
+    max_articles: int = 12
+    max_highlights: int = 7
+    send_hour: int = 7
+    send_minute: int = 0
+    timezone: str = "Asia/Ho_Chi_Minh"
+    check_interval: int = 900
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"
+
+
+@dataclass(frozen=True)
 class Settings:
     telegram_token: str
     telegram_chat_id: str
     log_level: str
     gold_price: GoldPriceConfig
+    morning_news: MorningNewsConfig = field(default_factory=MorningNewsConfig)
     state_file: str = ".bot_state.json"
     telegram_webhook_secret: str = ""
     github_token: str = ""
@@ -61,16 +86,21 @@ class Settings:
                 "Vui lòng cấu hình trong file .env hoặc biến môi trường."
             )
 
-        gold_enabled = _env("GOLD_ENABLED", "true").lower() in {
-            "1",
-            "true",
-            "yes",
-            "on",
-        }
+        gold_enabled = _env_bool("GOLD_ENABLED", True)
         gold_url = _env("GOLD_URL", "https://webgia.com/gia-vang/sjc/")
         gold_target_price = float(_env("GOLD_TARGET_PRICE", "13500000"))
         gold_check_interval = int(_env("GOLD_CHECK_INTERVAL", "3600"))
         state_file = _env("STATE_FILE", ".bot_state.json")
+
+        raw_rss_urls = _env("NEWS_RSS_URLS", "")
+        parsed_rss_urls = tuple(
+            u.strip() for u in raw_rss_urls.split(",") if u.strip()
+        ) or DEFAULT_NEWS_RSS_URLS
+        news_send_hour = max(0, min(23, int(_env("NEWS_SEND_HOUR", "7"))))
+        news_send_minute = max(0, min(59, int(_env("NEWS_SEND_MINUTE", "0"))))
+        news_max_articles = max(1, int(_env("NEWS_MAX_ARTICLES", "12")))
+        news_max_highlights = max(1, int(_env("NEWS_MAX_HIGHLIGHTS", "7")))
+        news_check_interval = max(60, int(_env("NEWS_CHECK_INTERVAL", "900")))
 
         return cls(
             telegram_token=token,
@@ -81,6 +111,18 @@ class Settings:
                 url=gold_url,
                 target_price=gold_target_price,
                 check_interval=gold_check_interval,
+            ),
+            morning_news=MorningNewsConfig(
+                enabled=_env_bool("NEWS_ENABLED", True),
+                rss_urls=parsed_rss_urls,
+                max_articles=news_max_articles,
+                max_highlights=news_max_highlights,
+                send_hour=news_send_hour,
+                send_minute=news_send_minute,
+                timezone=_env("NEWS_TIMEZONE", "Asia/Ho_Chi_Minh"),
+                check_interval=news_check_interval,
+                gemini_api_key=os.getenv("GEMINI_API_KEY", "").strip(),
+                gemini_model=_env("GEMINI_MODEL", "gemini-2.5-flash"),
             ),
             state_file=state_file,
             telegram_webhook_secret=os.getenv("TELEGRAM_WEBHOOK_SECRET", "").strip(),

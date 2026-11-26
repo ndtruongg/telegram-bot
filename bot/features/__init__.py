@@ -8,6 +8,7 @@ from bot.core.github_vars import GitHubVariablesClient
 from bot.core.state import StateStore
 from bot.core.telegram_client import TelegramClient
 from bot.features.gold_price import GoldPriceFeature
+from bot.features.morning_news import MorningNewsFeature
 
 
 def load_features(
@@ -30,6 +31,15 @@ def load_features(
                 config=settings.gold_price,
                 state_store=state_store,
                 github_vars=github_vars,
+            )
+        )
+
+    if settings.morning_news.enabled or include_disabled:
+        features.append(
+            MorningNewsFeature(
+                telegram=telegram,
+                config=settings.morning_news,
+                state_store=state_store,
             )
         )
 
