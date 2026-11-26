@@ -1,0 +1,67 @@
+name: Run Telegram Bot Hourly
+
+on:
+  schedule:
+    # Chạy mỗi tiếng 1 lần (dùng phút 17 để tránh delay vào đầu giờ :00)
+    - cron: "17 * * * *"
+  workflow_dispatch:
+    inputs:
+      feature:
+        description: "Tên 1 tính năng cụ thể để chạy thử (để trống = chạy tất cả)"
+        required: false
+        default: ""
+        type: string
+
+concurrency:
+  group: telegram-bot-hourly
+  cancel-in-progress: false
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Restore bot state cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .bot_state.json
+          key: bot-state-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            bot-state-
+
+      - name: Run bot features once
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          LOG_LEVEL: ${{ vars.LOG_LEVEL }}
+          GOLD_ENABLED: ${{ vars.GOLD_ENABLED }}
+          GOLD_URL: ${{ vars.GOLD_URL }}
+          GOLD_TARGET_PRICE: ${{ vars.GOLD_TARGET_PRICE }}
+          STATE_FILE: .bot_state.json
+          INPUT_FEATURE: ${{ inputs.feature }}
+        run: |
+          if [ -n "$INPUT_FEATURE" ]; then
+            python main.py --once --fail-on-error --feature "$INPUT_FEATURE"
+          else
+            python main.py --once --fail-on-error
+          fi
+
+      - name: Save bot state cache
+        if: always() && hashFiles('.bot_state.json') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: .bot_state.json
+          key: bot-state-${{ github.run_id }}-${{ github.run_attempt }}

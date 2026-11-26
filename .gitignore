@@ -9,8 +9,9 @@ __pycache__/
 .venv/
 venv/
 
-# Secrets & local config
+# Secrets, state & local config
 .env
+.bot_state.json
 *.log
 
 # OS / IDE

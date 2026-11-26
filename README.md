@@ -6,7 +6,10 @@ Bot Telegram được tổ chức theo kiến trúc module hóa, mỗi tính nă
 
 ```text
 .
-├── main.py                         # Điểm khởi chạy bot (hỗ trợ --once và --env)
+├── main.py                         # Điểm khởi chạy bot (hỗ trợ --once, --fail-on-error, --feature)
+├── .github/
+│   └── workflows/
+│       └── run-bot.yml             # GitHub Actions chạy tự động mỗi tiếng
 ├── .env                            # Cấu hình thật (không commit lên Git)
 ├── .env.example                    # Mẫu file cấu hình
 ├── .gitignore
@@ -17,6 +20,7 @@ Bot Telegram được tổ chức theo kiến trúc module hóa, mỗi tính nă
 │   │   ├── feature.py              # Lớp cơ sở BaseFeature
 │   │   ├── telegram_client.py      # Gửi tin nhắn & nhận cập nhật Telegram
 │   │   ├── scheduler.py            # Điều phối nhiều tính năng theo chu kỳ riêng
+│   │   ├── state.py                # Lưu trạng thái JSON giữa các lần chạy (dùng cho CI/cron)
 │   │   └── logger.py               # Cấu hình logging thống nhất
 │   ├── features/                   # Các tính năng của bot (mỗi tính năng 1 thư mục)
 │   │   ├── __init__.py             # Đăng ký danh sách tính năng được kích hoạt
@@ -68,6 +72,22 @@ Do `.venv/` và `.env` không được đẩy lên Git, trên máy mới bạn c
    ```bash
    .venv/bin/python -m unittest discover -s tests -v
    ```
+
+## Chạy tự động mỗi tiếng với GitHub Actions
+
+Repo đã có sẵn workflow [.github/workflows/run-bot.yml](.github/workflows/run-bot.yml) tự động chạy tất cả tính năng đang bật mỗi tiếng (`cron: "17 * * * *"`), lưu trạng thái chống spam qua GitHub Actions Cache và báo fail nếu có tính năng lỗi.
+
+Để kích hoạt sau khi `git push`:
+1. Vào **Settings → Secrets and variables → Actions** trên GitHub repo.
+2. Trong tab **Secrets**, thêm 2 secret bắt buộc:
+   - `TELEGRAM_TOKEN`
+   - `TELEGRAM_CHAT_ID`
+3. (Tuỳ chọn) Trong tab **Variables**, thêm các biến cấu hình nếu muốn đổi so với mặc định:
+   - `GOLD_TARGET_PRICE` (mặc định `13500000`)
+   - `GOLD_ENABLED` (mặc định `true`)
+   - `GOLD_URL` (mặc định `https://webgia.com/gia-vang/sjc/`)
+   - `LOG_LEVEL` (mặc định `INFO`)
+4. Vào tab **Actions → Run Telegram Bot Hourly → Run workflow** để chạy thử ngay.
 
 ## Cách thêm tính năng mới
 

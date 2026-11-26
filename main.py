@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import argparse
 import logging
+import sys
 
 from bot.config import Settings
-from bot.core import BotScheduler, TelegramClient, setup_logging
+from bot.core import BotScheduler, StateStore, TelegramClient, setup_logging
 from bot.features import load_features
 
 
@@ -16,6 +17,22 @@ def parse_args() -> argparse.Namespace:
         "--once",
         action="store_true",
         help="Chạy tất cả tính năng 1 lần rồi thoát (hữu ích cho cron job hoặc test).",
+    )
+    parser.add_argument(
+        "--fail-on-error",
+        action="store_true",
+        help="Trả về exit code 1 nếu có tính năng chạy lỗi trong chế độ --once (hữu ích cho CI/GitHub Actions).",
+    )
+    parser.add_argument(
+        "--feature",
+        action="append",
+        dest="features",
+        help="Chỉ chạy tính năng có tên chỉ định (có thể truyền nhiều lần). Bỏ trống để chạy tất cả.",
+    )
+    parser.add_argument(
+        "--state-file",
+        default=None,
+        help="Đường dẫn file lưu trạng thái giữa các lần chạy (mặc định đọc từ STATE_FILE hoặc .bot_state.json).",
     )
     parser.add_argument(
         "--env",
@@ -35,14 +52,36 @@ def main() -> None:
         token=settings.telegram_token,
         default_chat_id=settings.telegram_chat_id,
     )
+    state_store = StateStore(args.state_file or settings.state_file)
+
+    selected = set(args.features or [])
+    loaded_features = load_features(
+        settings=settings,
+        telegram=telegram,
+        state_store=state_store,
+    )
+
+    if selected:
+        available_names = {f.name for f in loaded_features}
+        unknown = sorted(selected - available_names)
+        if unknown:
+            logger.error(
+                "Không tìm thấy hoặc chưa bật tính năng: %s (hiện có: %s)",
+                ", ".join(unknown),
+                ", ".join(sorted(available_names)) or "trống",
+            )
+            sys.exit(2)
+        loaded_features = [f for f in loaded_features if f.name in selected]
 
     scheduler = BotScheduler()
-    for feature in load_features(settings=settings, telegram=telegram):
+    for feature in loaded_features:
         scheduler.register(feature)
 
     if args.once:
         logger.info("Chạy ở chế độ --once (1 chu kỳ).")
-        scheduler.run_once()
+        all_ok = scheduler.run_once()
+        if args.fail_on_error and not all_ok:
+            sys.exit(1)
     else:
         scheduler.run_forever()
 

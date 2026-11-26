@@ -4,11 +4,16 @@ from __future__ import annotations
 
 from bot.config import Settings
 from bot.core.feature import BaseFeature
+from bot.core.state import StateStore
 from bot.core.telegram_client import TelegramClient
 from bot.features.gold_price import GoldPriceFeature
 
 
-def load_features(settings: Settings, telegram: TelegramClient) -> list[BaseFeature]:
+def load_features(
+    settings: Settings,
+    telegram: TelegramClient,
+    state_store: StateStore | None = None,
+) -> list[BaseFeature]:
     """Instantiate and return all enabled features.
 
     Khi thêm tính năng mới, chỉ cần import class tính năng và thêm vào danh sách bên dưới.
@@ -20,6 +25,7 @@ def load_features(settings: Settings, telegram: TelegramClient) -> list[BaseFeat
             GoldPriceFeature(
                 telegram=telegram,
                 config=settings.gold_price,
+                state_store=state_store,
             )
         )
 

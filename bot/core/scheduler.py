@@ -33,10 +33,16 @@ class BotScheduler:
             feature.interval_seconds,
         )
 
-    def run_once(self) -> None:
-        """Execute all registered features immediately once."""
+    def run_once(self) -> bool:
+        """Execute all registered features immediately once.
+
+        Returns ``True`` if every feature completed without raising an exception.
+        """
+        all_ok = True
         for task in self._tasks:
-            self._safe_execute(task.feature)
+            if not self._safe_execute(task.feature):
+                all_ok = False
+        return all_ok
 
     def run_forever(self) -> None:
         """Main event loop running features whenever their schedule is due."""
@@ -64,8 +70,10 @@ class BotScheduler:
         return min(self._tick_seconds, remaining) if remaining > 0 else 0.0
 
     @staticmethod
-    def _safe_execute(feature: BaseFeature) -> None:
+    def _safe_execute(feature: BaseFeature) -> bool:
         try:
             feature.execute()
+            return True
         except Exception:
             logger.exception("Lỗi không mong muốn khi chạy tính năng '%s'.", feature.name)
+            return False
