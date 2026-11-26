@@ -100,7 +100,7 @@ Repo đã có sẵn workflow [.github/workflows/run-bot.yml](.github/workflows/r
 Bot hỗ trợ các lệnh phản hồi tức thì qua Webhook (Telegram chỉ cho phép dấu `_` trong tên lệnh, nhưng bot vẫn tự nhận nếu bạn gõ dấu `-`):
 - `/start` hoặc `/help`: Xem hướng dẫn và danh sách lệnh.
 - `/gold_check`: Kiểm tra giá vàng hiện tại ngay lập tức.
-- `/gold_set <số tiền>`: Cập nhật `GOLD_TARGET_PRICE` lên **GitHub Repository Variable** (hỗ trợ cả `13450000`, `13.450.000` lẫn `84.5`).
+- `/gold_set <số tiền>`: Cập nhật `GOLD_TARGET_PRICE` lên **GitHub Repository Variable** (hỗ trợ cả `13450000` và `13.450.000`).
 - `/gold_status`: Xem mức giá mục tiêu hiện tại đang đồng bộ.
 
 ### Cách triển khai Webhook (khuyến nghị Vercel — miễn phí)

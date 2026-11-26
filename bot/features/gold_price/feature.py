@@ -83,7 +83,7 @@ class GoldPriceFeature(BaseFeature):
         router.register(
             command="gold_set",
             usage="/gold_set <số tiền>",
-            description="Đổi mức giá mục tiêu (VD: /gold_set 13450000 hoặc /gold_set 84.5)",
+            description="Đổi mức giá mục tiêu (VD: /gold_set 13450000)",
             handler=self._cmd_gold_set,
         )
         router.register(
@@ -159,15 +159,14 @@ class GoldPriceFeature(BaseFeature):
                 "⚠️ Vui lòng nhập mức giá mục tiêu.\n"
                 "Ví dụ:\n"
                 "• <code>/gold_set 13450000</code> (theo đồng)\n"
-                "• <code>/gold_set 13.450.000</code> (có dấu phân cách)\n"
-                "• <code>/gold_set 84.5</code> (theo triệu)"
+                "• <code>/gold_set 13.450.000</code> (có dấu phân cách)"
             )
 
         new_price = parse_user_price(ctx.args)
         if new_price is None:
             return (
                 f"⚠️ Giá trị <code>{html.escape(ctx.args)}</code> không hợp lệ.\n"
-                "Vui lòng nhập số dương, ví dụ: <code>/gold_set 13450000</code> hoặc <code>/gold_set 84.5</code>."
+                "Vui lòng nhập số dương, ví dụ: <code>/gold_set 13450000</code> hoặc <code>/gold_set 13.450.000</code>."
             )
 
         old_price = self.get_target_price(refresh_from_github=True)
