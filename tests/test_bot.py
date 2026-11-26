@@ -243,12 +243,13 @@ class TestCommandsAndWebhook(unittest.TestCase):
         router = CommandRouter()
         feature.register_commands(router)
 
-        # /start & /help list all commands
+        # /start & /help list all commands and escape angle brackets for Telegram HTML
         res = router.handle_update(self._make_update("/help"), allowed_chat_id="123456")
         self.assertIsNotNone(res)
         assert res is not None
         self.assertIn("/gold_check", res[1])
-        self.assertIn("/gold_set", res[1])
+        self.assertIn("/gold_set &lt;số tiền&gt;", res[1])
+        self.assertNotIn("<số tiền>", res[1])
         self.assertIn("/gold_status", res[1])
 
         # /gold-check (hyphen normalized to /gold_check)

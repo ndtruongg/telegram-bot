@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import logging
 from typing import Callable
 
@@ -144,9 +145,9 @@ class GoldPriceFeature(BaseFeature):
 
         return (
             f"💰 <b>GIÁ VÀNG HIỆN TẠI</b>\n\n"
-            f"Loại: <b>{data.name}</b>\n"
-            f"Giá mua vào: <b>{data.buy_raw}</b>\n"
-            f"Giá bán ra: <b>{data.sell_raw}</b>\n"
+            f"Loại: <b>{html.escape(data.name)}</b>\n"
+            f"Giá mua vào: <b>{html.escape(data.buy_raw)}</b>\n"
+            f"Giá bán ra: <b>{html.escape(data.sell_raw)}</b>\n"
             f"Giá mục tiêu: <b>{format_price(target_price)}</b>\n"
             f"Trạng thái: {status_line}\n"
             f"🔗 <a href='{self._config.url}'>Xem chi tiết</a>"
@@ -165,7 +166,7 @@ class GoldPriceFeature(BaseFeature):
         new_price = parse_user_price(ctx.args)
         if new_price is None:
             return (
-                f"⚠️ Giá trị <code>{ctx.args}</code> không hợp lệ.\n"
+                f"⚠️ Giá trị <code>{html.escape(ctx.args)}</code> không hợp lệ.\n"
                 "Vui lòng nhập số dương, ví dụ: <code>/gold_set 13450000</code> hoặc <code>/gold_set 84.5</code>."
             )
 
@@ -179,7 +180,7 @@ class GoldPriceFeature(BaseFeature):
                     "Vui lòng kiểm tra lại <code>GITHUB_TOKEN</code> (quyền <b>Variables: Read and write</b>) "
                     "và <code>GITHUB_REPOSITORY</code>."
                 )
-            sync_note = f"GitHub Variable (<code>{self._github_vars.repository}</code>)"
+            sync_note = f"GitHub Variable (<code>{html.escape(self._github_vars.repository)}</code>)"
         else:
             sync_note = "Bộ nhớ tạm (chưa cấu hình <code>GITHUB_TOKEN</code> / <code>GITHUB_REPOSITORY</code>)"
 
@@ -198,7 +199,7 @@ class GoldPriceFeature(BaseFeature):
     def _cmd_gold_status(self, _ctx: CommandContext) -> str:
         target_price = self.get_target_price(refresh_from_github=True)
         source = (
-            f"GitHub Variable (<code>{self._github_vars.repository}</code>)"
+            f"GitHub Variable (<code>{html.escape(self._github_vars.repository)}</code>)"
             if self._github_vars is not None
             else "Biến môi trường cục bộ"
         )
@@ -214,9 +215,9 @@ class GoldPriceFeature(BaseFeature):
     def _build_alert_message(self, data: GoldPrice, target_price: float) -> str:
         return (
             f"🔔 <b>CẢNH BÁO GIÁ TỐT!</b>\n\n"
-            f"Loại: <b>{data.name}</b>\n"
-            f"Giá bán ra hiện tại: <b>{data.sell_raw}</b> "
+            f"Loại: <b>{html.escape(data.name)}</b>\n"
+            f"Giá bán ra hiện tại: <b>{html.escape(data.sell_raw)}</b> "
             f"(Mục tiêu: {format_price(target_price)})\n"
-            f"Giá mua vào: {data.buy_raw}\n"
+            f"Giá mua vào: {html.escape(data.buy_raw)}\n"
             f"🔗 <a href='{self._config.url}'>Xem chi tiết</a>"
         )

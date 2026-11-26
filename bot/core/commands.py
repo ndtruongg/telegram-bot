@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import logging
 from dataclasses import dataclass
 from typing import Any, Callable
@@ -118,9 +119,10 @@ class CommandRouter:
         cmd, args = parsed
         spec = self._commands.get(cmd)
         if spec is None:
+            safe_cmd = html.escape(cmd)
             return (
                 chat_id,
-                f"❓ Lệnh <code>/{cmd}</code> không tồn tại.\n"
+                f"❓ Lệnh <code>/{safe_cmd}</code> không tồn tại.\n"
                 f"Gõ /help để xem danh sách lệnh hỗ trợ.",
             )
 
@@ -134,7 +136,8 @@ class CommandRouter:
             reply = spec.handler(ctx)
         except Exception:
             logger.exception("Lỗi khi xử lý lệnh /%s", cmd)
-            reply = f"⚠️ Có lỗi xảy ra khi xử lý lệnh <code>/{cmd}</code>. Vui lòng thử lại sau."
+            safe_cmd = html.escape(cmd)
+            reply = f"⚠️ Có lỗi xảy ra khi xử lý lệnh <code>/{safe_cmd}</code>. Vui lòng thử lại sau."
 
         return (chat_id, reply)
 
@@ -145,6 +148,7 @@ class CommandRouter:
             "Danh sách lệnh hiện có:",
         ]
         for spec in self._commands.values():
-            label = spec.usage or f"/{spec.command}"
-            lines.append(f"• <code>{label}</code> — {spec.description}")
+            label = html.escape(spec.usage or f"/{spec.command}")
+            description = html.escape(spec.description)
+            lines.append(f"• <code>{label}</code> — {description}")
         return "\n".join(lines)
