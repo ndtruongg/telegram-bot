@@ -51,8 +51,8 @@ class GoldPriceConfig:
 class MorningNewsConfig:
     enabled: bool = True
     rss_urls: tuple[str, ...] = DEFAULT_NEWS_RSS_URLS
-    max_articles: int = 12
-    max_highlights: int = 7
+    max_articles: int = 20
+    max_highlights: int = 12
     send_hour: int = 7
     send_minute: int = 0
     timezone: str = "Asia/Ho_Chi_Minh"
@@ -98,8 +98,8 @@ class Settings:
         ) or DEFAULT_NEWS_RSS_URLS
         news_send_hour = max(0, min(23, int(_env("NEWS_SEND_HOUR", "7"))))
         news_send_minute = max(0, min(59, int(_env("NEWS_SEND_MINUTE", "0"))))
-        news_max_articles = max(1, int(_env("NEWS_MAX_ARTICLES", "12")))
-        news_max_highlights = max(1, int(_env("NEWS_MAX_HIGHLIGHTS", "7")))
+        news_max_articles = max(1, int(_env("NEWS_MAX_ARTICLES", "20")))
+        news_max_highlights = max(1, int(_env("NEWS_MAX_HIGHLIGHTS", "12")))
         news_check_interval = max(60, int(_env("NEWS_CHECK_INTERVAL", "900")))
 
         return cls(

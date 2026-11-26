@@ -60,7 +60,7 @@ def _build_prompt(articles: list[NewsArticle], max_highlights: int) -> str:
         "    {\n"
         '      "index": 1,\n'
         '      "headline": "Tiêu đề ngắn gọn, súc tích bằng tiếng Việt (tối đa ~15 từ)",\n'
-        '      "summary": "1-2 câu tóm tắt ý chính dễ hiểu, khách quan, không thêm thông tin bịa đặt."\n'
+        '      "summary": "1 câu ngắn gọn (tối đa ~25 từ) tóm tắt ý chính dễ hiểu, khách quan, không thêm thông tin bịa đặt."\n'
         "    }\n"
         "  ]\n"
         "}\n\n"
@@ -146,14 +146,18 @@ def _parse_digest_json(raw_text: str, articles: list[NewsArticle]) -> NewsDigest
 
 def build_rss_fallback_digest(
     articles: list[NewsArticle],
-    max_highlights: int = 7,
+    max_highlights: int = 12,
     reason: str = "",
 ) -> NewsDigest:
     """Create a clean digest directly from RSS headlines and descriptions without AI."""
+    snippet_limit = 130 if max_highlights >= 10 else 180
     items = tuple(
         SummarizedItem(
             headline=article.title,
-            summary=article.summary[:180] + ("..." if len(article.summary) > 180 else ""),
+            summary=(
+                article.summary[:snippet_limit]
+                + ("..." if len(article.summary) > snippet_limit else "")
+            ),
             article=article,
         )
         for article in articles[:max_highlights]
@@ -171,7 +175,7 @@ def summarize_with_gemini(
     *,
     api_key: str,
     model: str = "gemini-2.5-flash",
-    max_highlights: int = 7,
+    max_highlights: int = 12,
     timeout: int = 25,
     session: requests.Session | None = None,
 ) -> NewsDigest:

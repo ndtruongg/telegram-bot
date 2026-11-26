@@ -355,6 +355,8 @@ class TestMorningNewsFeature(unittest.TestCase):
                 )
                 self.assertEqual(settings.morning_news.send_hour, 6)
                 self.assertEqual(settings.morning_news.send_minute, 30)
+                self.assertEqual(settings.morning_news.max_articles, 20)
+                self.assertEqual(settings.morning_news.max_highlights, 12)
                 self.assertEqual(settings.morning_news.gemini_api_key, "my-gemini-key")
         finally:
             for k, v in backup.items():
@@ -362,6 +364,32 @@ class TestMorningNewsFeature(unittest.TestCase):
                     os.environ.pop(k, None)
                 else:
                     os.environ[k] = v
+
+    def test_twelve_items_fit_in_single_telegram_message(self) -> None:
+        tz = ZoneInfo("Asia/Ho_Chi_Minh")
+        items = tuple(
+            SummarizedItem(
+                headline=f"Tin nổi bật số {i}: Diễn biến mới đáng chú ý sáng nay",
+                summary=f"Tóm tắt ngắn gọn một câu cho bản tin số {i} giúp người đọc nắm nhanh ý chính.",
+                article=NewsArticle(
+                    title=f"Tin {i}",
+                    link=f"https://vnexpress.net/tin-noi-bat-{i}.html",
+                    summary="",
+                    source="VnExpress" if i % 2 else "Tuổi Trẻ",
+                ),
+            )
+            for i in range(1, 13)
+        )
+        digest = NewsDigest(
+            overview="Bức tranh thời sự nổi bật sáng nay trên nhiều lĩnh vực.",
+            items=items,
+            used_ai=True,
+        )
+        msg = MorningNewsFeature._format_digest_message(
+            digest, datetime(2026, 11, 26, 7, 0, tzinfo=tz)
+        )
+        self.assertLessEqual(len(msg), 4096)
+        self.assertIn("<b>12. ", msg)
 
 
 if __name__ == "__main__":
