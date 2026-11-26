@@ -6,7 +6,10 @@ Bot Telegram được tổ chức theo kiến trúc module hóa, mỗi tính nă
 
 ```text
 .
-├── main.py                         # Điểm khởi chạy bot (hỗ trợ --once, --fail-on-error, --feature)
+├── main.py                         # Điểm khởi chạy bot (--once, --fail-on-error, --set-webhook, ...)
+├── webhook_server.py               # HTTP Webhook server (dùng cho Render / chạy thử local)
+├── api/
+│   └── webhook.py                  # Vercel Serverless Function cho Telegram Webhook
 ├── .github/
 │   └── workflows/
 │       └── run-bot.yml             # GitHub Actions chạy tự động mỗi tiếng
@@ -18,7 +21,10 @@ Bot Telegram được tổ chức theo kiến trúc module hóa, mỗi tính nă
 │   ├── config.py                   # Đọc cấu hình từ .env / biến môi trường
 │   ├── core/                       # Hạ tầng dùng chung cho mọi tính năng
 │   │   ├── feature.py              # Lớp cơ sở BaseFeature
-│   │   ├── telegram_client.py      # Gửi tin nhắn & nhận cập nhật Telegram
+│   │   ├── commands.py             # Bộ định tuyến lệnh Telegram (/start, /help, /gold_*)
+│   │   ├── webhook.py              # Xử lý HTTP webhook dùng chung cho Vercel & Render
+│   │   ├── github_vars.py          # Đồng bộ biến cấu hình qua GitHub Repository Variables API
+│   │   ├── telegram_client.py      # Gửi tin nhắn, setWebhook, setMyCommands
 │   │   ├── scheduler.py            # Điều phối nhiều tính năng theo chu kỳ riêng
 │   │   ├── state.py                # Lưu trạng thái JSON giữa các lần chạy (dùng cho CI/cron)
 │   │   └── logger.py               # Cấu hình logging thống nhất
@@ -88,6 +94,37 @@ Repo đã có sẵn workflow [.github/workflows/run-bot.yml](.github/workflows/r
    - `GOLD_URL` (mặc định `https://webgia.com/gia-vang/sjc/`)
    - `LOG_LEVEL` (mặc định `INFO`)
 4. Vào tab **Actions → Run Telegram Bot Hourly → Run workflow** để chạy thử ngay.
+
+## Các lệnh Telegram tương tác (Webhook Serverless trên Vercel / Render)
+
+Bot hỗ trợ các lệnh phản hồi tức thì qua Webhook (Telegram chỉ cho phép dấu `_` trong tên lệnh, nhưng bot vẫn tự nhận nếu bạn gõ dấu `-`):
+- `/start` hoặc `/help`: Xem hướng dẫn và danh sách lệnh.
+- `/gold_check`: Kiểm tra giá vàng hiện tại ngay lập tức.
+- `/gold_set <số tiền>`: Cập nhật `GOLD_TARGET_PRICE` lên **GitHub Repository Variable** (hỗ trợ cả `13450000`, `13.450.000` lẫn `84.5`).
+- `/gold_status`: Xem mức giá mục tiêu hiện tại đang đồng bộ.
+
+### Cách triển khai Webhook (khuyến nghị Vercel — miễn phí)
+
+1. **Tạo GitHub Fine-grained Personal Access Token** (để `/gold_set` ghi được vào Repository Variable):
+   - Vào GitHub → **Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token**.
+   - Chọn **Only select repositories** → chọn repo `telegram-bot`.
+   - Mục **Repository permissions → Variables**: chọn **Read and write** → tạo token.
+
+2. **Deploy lên Vercel** (hoặc **Render**):
+   - **Vercel:** Import repo GitHub này lên [vercel.com](https://vercel.com) (Vercel tự nhận endpoint tại `https://<ten-app>.vercel.app/api/webhook`).
+   - **Render:** Tạo Web Service chạy Python, Start Command: `python webhook_server.py` (endpoint tại `https://<ten-app>.onrender.com/api/webhook`).
+   - Thêm các Environment Variables sau trên Vercel/Render:
+     - `TELEGRAM_TOKEN`
+     - `TELEGRAM_CHAT_ID`
+     - `TELEGRAM_WEBHOOK_SECRET` *(chuỗi ngẫu nhiên tự đặt để bảo vệ endpoint)*
+     - `GITHUB_TOKEN` *(Fine-grained PAT vừa tạo ở bước 1)*
+     - `GITHUB_REPOSITORY` *(ví dụ: `ndtruongg/telegram-bot`)*
+
+3. **Đăng ký Webhook & menu lệnh `/` lên Telegram** (chạy 1 lần duy nhất từ máy bạn sau khi điền `TELEGRAM_WEBHOOK_SECRET` vào `.env`):
+   ```bash
+   .venv/bin/python main.py --set-webhook https://<ten-app>.vercel.app/api/webhook
+   ```
+   *(Nếu chỉ muốn cập nhật lại menu lệnh `/` sau khi thêm tính năng mới: `.venv/bin/python main.py --sync-commands`.)*
 
 ## Cách thêm tính năng mới
 

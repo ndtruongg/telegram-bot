@@ -8,6 +8,7 @@ import sys
 
 from bot.config import Settings
 from bot.core import BotScheduler, StateStore, TelegramClient, setup_logging
+from bot.core.webhook import build_command_router, build_github_vars_client
 from bot.features import load_features
 
 
@@ -35,6 +36,22 @@ def parse_args() -> argparse.Namespace:
         help="Đường dẫn file lưu trạng thái giữa các lần chạy (mặc định đọc từ STATE_FILE hoặc .bot_state.json).",
     )
     parser.add_argument(
+        "--sync-commands",
+        action="store_true",
+        help="Đăng ký danh sách lệnh / lên menu gợi ý của Telegram rồi thoát.",
+    )
+    parser.add_argument(
+        "--set-webhook",
+        metavar="URL",
+        default=None,
+        help="Đăng ký URL webhook (kèm TELEGRAM_WEBHOOK_SECRET nếu có) và đồng bộ danh sách lệnh lên Telegram.",
+    )
+    parser.add_argument(
+        "--delete-webhook",
+        action="store_true",
+        help="Xoá webhook đang gắn trên Telegram Bot rồi thoát.",
+    )
+    parser.add_argument(
         "--env",
         default=".env",
         help="Đường dẫn tới file cấu hình .env (mặc định: .env).",
@@ -52,6 +69,27 @@ def main() -> None:
         token=settings.telegram_token,
         default_chat_id=settings.telegram_chat_id,
     )
+    github_vars = build_github_vars_client(settings)
+
+    if args.delete_webhook:
+        ok = telegram.delete_webhook()
+        sys.exit(0 if ok else 1)
+
+    if args.set_webhook or args.sync_commands:
+        router = build_command_router(
+            settings=settings,
+            telegram=telegram,
+            github_vars=github_vars,
+        )
+        ok = True
+        if args.set_webhook:
+            ok = telegram.set_webhook(
+                url=args.set_webhook,
+                secret_token=settings.telegram_webhook_secret or None,
+            ) and ok
+        ok = telegram.set_my_commands(router.get_telegram_commands()) and ok
+        sys.exit(0 if ok else 1)
+
     state_store = StateStore(args.state_file or settings.state_file)
 
     selected = set(args.features or [])
@@ -59,6 +97,7 @@ def main() -> None:
         settings=settings,
         telegram=telegram,
         state_store=state_store,
+        github_vars=github_vars,
     )
 
     if selected:

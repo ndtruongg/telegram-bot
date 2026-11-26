@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
 
 from bot.core.telegram_client import TelegramClient
+
+if TYPE_CHECKING:
+    from bot.core.commands import CommandRouter
 
 
 class BaseFeature(ABC):
@@ -13,7 +17,8 @@ class BaseFeature(ABC):
     To add a new feature:
     1. Create a subpackage under ``bot/features/<feature_name>/``.
     2. Subclass ``BaseFeature`` and implement ``name``, ``interval_seconds``, and ``execute()``.
-    3. Register the feature in ``bot/features/__init__.py``.
+    3. Optionally override ``register_commands(router)`` to expose Telegram slash commands.
+    4. Register the feature in ``bot/features/__init__.py``.
     """
 
     def __init__(self, telegram: TelegramClient) -> None:
@@ -32,3 +37,7 @@ class BaseFeature(ABC):
     @abstractmethod
     def execute(self) -> None:
         """Run one check/execution cycle of the feature."""
+
+    def register_commands(self, router: "CommandRouter") -> None:
+        """Register optional Telegram slash commands owned by this feature."""
+        return None

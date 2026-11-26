@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 import unittest
@@ -9,12 +10,15 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 from bot.config import GoldPriceConfig, Settings
+from bot.core.commands import CommandRouter
 from bot.core.feature import BaseFeature
+from bot.core.github_vars import GitHubVariablesClient
 from bot.core.scheduler import BotScheduler
 from bot.core.state import StateStore
+from bot.core.webhook import process_webhook_request
 from bot.features.gold_price.feature import GoldPriceFeature
 from bot.features.gold_price.scraper import GoldPrice, parse_sjc_gold_html
-from bot.utils.parsers import format_price, parse_price
+from bot.utils.parsers import format_price, parse_price, parse_user_price, serialize_price
 
 
 class TestParsers(unittest.TestCase):
@@ -28,6 +32,23 @@ class TestParsers(unittest.TestCase):
 
     def test_format_price(self) -> None:
         self.assertEqual(format_price(13500000), "13,500,000")
+        self.assertEqual(format_price(84.5), "84.5")
+        self.assertEqual(format_price(84.55), "84.55")
+
+    def test_parse_user_price_and_serialize(self) -> None:
+        self.assertEqual(parse_user_price("13450000"), 13450000.0)
+        self.assertEqual(parse_user_price("13.450.000"), 13450000.0)
+        self.assertEqual(parse_user_price("13,450,000"), 13450000.0)
+        self.assertEqual(parse_user_price("84.5"), 84.5)
+        self.assertEqual(parse_user_price("84,5"), 84.5)
+        self.assertEqual(parse_user_price("84.55"), 84.55)
+        self.assertEqual(parse_user_price("13450000đ"), 13450000.0)
+        self.assertIsNone(parse_user_price("0"))
+        self.assertIsNone(parse_user_price("-100"))
+        self.assertIsNone(parse_user_price("abc"))
+
+        self.assertEqual(serialize_price(13450000.0), "13450000")
+        self.assertEqual(serialize_price(84.5), "84.5")
 
 
 class TestGoldScraper(unittest.TestCase):
@@ -161,6 +182,159 @@ class TestGoldPriceFeature(unittest.TestCase):
         )
         with self.assertRaises(RuntimeError):
             feature.execute()
+
+    def test_target_change_between_runs_resets_spam_suppression(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_path = Path(tmpdir) / ".bot_state.json"
+            telegram = MagicMock()
+            telegram.send_message.return_value = True
+            price_low = GoldPrice("SJC 1L", "13.100.000", 13400000.0, "13.400.000")
+
+            # Run 1 with target 13,500,000 -> alerts
+            GoldPriceFeature(
+                telegram=telegram,
+                config=self._make_config(target_price=13500000),
+                fetcher=lambda _url: price_low,
+                state_store=StateStore(state_path),
+            ).execute()
+            self.assertEqual(telegram.send_message.call_count, 1)
+
+            # Run 2 with updated target 14,000,000 -> resets dedupe and alerts again
+            GoldPriceFeature(
+                telegram=telegram,
+                config=self._make_config(target_price=14000000),
+                fetcher=lambda _url: price_low,
+                state_store=StateStore(state_path),
+            ).execute()
+            self.assertEqual(telegram.send_message.call_count, 2)
+
+
+class TestCommandsAndWebhook(unittest.TestCase):
+    def _make_config(self, target_price: float = 13500000) -> GoldPriceConfig:
+        return GoldPriceConfig(
+            enabled=True,
+            url="https://example.com/gold",
+            target_price=target_price,
+            check_interval=3600,
+        )
+
+    def _make_update(self, text: str, chat_id: str = "123456") -> dict:
+        return {
+            "update_id": 1,
+            "message": {
+                "chat": {"id": int(chat_id)},
+                "text": text,
+            },
+        }
+
+    def test_help_and_gold_commands_with_github_vars(self) -> None:
+        telegram = MagicMock()
+        github_vars = MagicMock()
+        github_vars.repository = "ndtruongg/telegram-bot"
+        github_vars.get_variable.return_value = "13500000"
+        github_vars.set_variable.return_value = True
+
+        feature = GoldPriceFeature(
+            telegram=telegram,
+            config=self._make_config(target_price=13500000),
+            fetcher=lambda _url: GoldPrice("SJC 1L", "13.100.000", 13400000.0, "13.400.000"),
+            github_vars=github_vars,
+        )
+        router = CommandRouter()
+        feature.register_commands(router)
+
+        # /start & /help list all commands
+        res = router.handle_update(self._make_update("/help"), allowed_chat_id="123456")
+        self.assertIsNotNone(res)
+        assert res is not None
+        self.assertIn("/gold_check", res[1])
+        self.assertIn("/gold_set", res[1])
+        self.assertIn("/gold_status", res[1])
+
+        # /gold-check (hyphen normalized to /gold_check)
+        res = router.handle_update(self._make_update("/gold-check"), allowed_chat_id="123456")
+        self.assertIsNotNone(res)
+        assert res is not None
+        self.assertIn("13.400.000", res[1])
+        self.assertIn("Đã đạt ngưỡng mục tiêu", res[1])
+
+        # /gold_set updates GitHub Variable
+        res = router.handle_update(self._make_update("/gold_set 84.5"), allowed_chat_id="123456")
+        self.assertIsNotNone(res)
+        assert res is not None
+        github_vars.set_variable.assert_called_once_with("GOLD_TARGET_PRICE", "84.5")
+        self.assertIn("84.5", res[1])
+
+        # /gold_status reads latest GitHub Variable
+        github_vars.get_variable.return_value = "84.5"
+        res = router.handle_update(self._make_update("/gold_status"), allowed_chat_id="123456")
+        self.assertIsNotNone(res)
+        assert res is not None
+        self.assertIn("84.5", res[1])
+
+        # Unauthorized chat_id is ignored
+        self.assertIsNone(
+            router.handle_update(self._make_update("/gold_set 100"), allowed_chat_id="999999")
+        )
+
+    def test_webhook_secret_validation_and_dispatch(self) -> None:
+        settings = Settings(
+            telegram_token="tok",
+            telegram_chat_id="123456",
+            log_level="INFO",
+            gold_price=self._make_config(),
+            telegram_webhook_secret="my-secret",
+        )
+        telegram = MagicMock()
+        router = CommandRouter()
+
+        body = json.dumps(self._make_update("/start")).encode("utf-8")
+
+        # Wrong secret -> 403
+        status, _ = process_webhook_request(
+            body,
+            {"X-Telegram-Bot-Api-Secret-Token": "wrong"},
+            settings=settings,
+            telegram=telegram,
+            router=router,
+        )
+        self.assertEqual(status, 403)
+        telegram.send_message.assert_not_called()
+
+        # Valid secret -> 200 and sends reply
+        status, payload = process_webhook_request(
+            body,
+            {"x-telegram-bot-api-secret-token": "my-secret"},
+            settings=settings,
+            telegram=telegram,
+            router=router,
+        )
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["ok"])
+        telegram.send_message.assert_called_once()
+
+
+class TestGitHubVariablesClient(unittest.TestCase):
+    def test_set_variable_creates_when_missing(self) -> None:
+        session = MagicMock()
+        patch_resp = MagicMock(status_code=404, text="Not Found")
+        post_resp = MagicMock(status_code=201, text="")
+        session.patch.return_value = patch_resp
+        session.post.return_value = post_resp
+
+        client = GitHubVariablesClient("ghp_test", "ndtruongg/telegram-bot", session=session)
+        self.assertTrue(client.set_variable("GOLD_TARGET_PRICE", "13450000"))
+        session.patch.assert_called_once()
+        session.post.assert_called_once()
+
+    def test_get_variable_returns_value_or_none(self) -> None:
+        session = MagicMock()
+        get_resp = MagicMock(status_code=200)
+        get_resp.json.return_value = {"name": "GOLD_TARGET_PRICE", "value": "84.5"}
+        session.get.return_value = get_resp
+
+        client = GitHubVariablesClient("ghp_test", "ndtruongg/telegram-bot", session=session)
+        self.assertEqual(client.get_variable("GOLD_TARGET_PRICE"), "84.5")
 
 
 class TestScheduler(unittest.TestCase):

@@ -70,3 +70,56 @@ class TelegramClient:
         except requests.RequestException as exc:
             logger.error("Lỗi lấy cập nhật Telegram: %s", exc)
             return []
+
+    def set_my_commands(self, commands: list[dict[str, str]]) -> bool:
+        """Register the bot's slash-command menu in Telegram clients."""
+        try:
+            response = self._session.post(
+                self._endpoint("setMyCommands"),
+                json={"commands": commands},
+                timeout=self._timeout,
+            )
+            if response.status_code == 200 and response.json().get("ok"):
+                logger.info("Đã đồng bộ %d lệnh Telegram thành công.", len(commands))
+                return True
+            logger.error("Lỗi setMyCommands (%s): %s", response.status_code, response.text)
+            return False
+        except requests.RequestException as exc:
+            logger.error("Lỗi kết nối Telegram khi gọi setMyCommands: %s", exc)
+            return False
+
+    def set_webhook(self, url: str, secret_token: str | None = None) -> bool:
+        """Configure the Telegram Bot webhook URL (with optional secret token header)."""
+        payload: dict[str, Any] = {"url": url}
+        if secret_token:
+            payload["secret_token"] = secret_token
+        try:
+            response = self._session.post(
+                self._endpoint("setWebhook"),
+                json=payload,
+                timeout=self._timeout,
+            )
+            if response.status_code == 200 and response.json().get("ok"):
+                logger.info("Đã cài đặt Telegram Webhook: %s", url)
+                return True
+            logger.error("Lỗi setWebhook (%s): %s", response.status_code, response.text)
+            return False
+        except requests.RequestException as exc:
+            logger.error("Lỗi kết nối Telegram khi gọi setWebhook: %s", exc)
+            return False
+
+    def delete_webhook(self) -> bool:
+        """Remove the currently configured Telegram Bot webhook."""
+        try:
+            response = self._session.post(
+                self._endpoint("deleteWebhook"),
+                timeout=self._timeout,
+            )
+            if response.status_code == 200 and response.json().get("ok"):
+                logger.info("Đã xoá Telegram Webhook.")
+                return True
+            logger.error("Lỗi deleteWebhook (%s): %s", response.status_code, response.text)
+            return False
+        except requests.RequestException as exc:
+            logger.error("Lỗi kết nối Telegram khi gọi deleteWebhook: %s", exc)
+            return False

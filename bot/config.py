@@ -44,6 +44,9 @@ class Settings:
     log_level: str
     gold_price: GoldPriceConfig
     state_file: str = ".bot_state.json"
+    telegram_webhook_secret: str = ""
+    github_token: str = ""
+    github_repository: str = ""
 
     @classmethod
     def load(cls, env_file: str | Path = ".env") -> "Settings":
@@ -80,4 +83,7 @@ class Settings:
                 check_interval=gold_check_interval,
             ),
             state_file=state_file,
+            telegram_webhook_secret=os.getenv("TELEGRAM_WEBHOOK_SECRET", "").strip(),
+            github_token=os.getenv("GITHUB_TOKEN", "").strip(),
+            github_repository=os.getenv("GITHUB_REPOSITORY", "").strip(),
         )
