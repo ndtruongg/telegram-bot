@@ -253,18 +253,23 @@ class LunarCalendarFeature(BaseFeature):
 
         lines = [
             f"🌙 <b>RẰM, MÙNG 1 & NGÀY LỄ ({days_ahead} NGÀY TỚI)</b>",
-            f"<i>Tính từ {format_solar_date_vi(today, include_weekday=True)}</i>",
+            f"<i>Tính từ {format_solar_date_vi(today, include_weekday=True)} • {len(events)} sự kiện</i>",
             "",
         ]
-        for days_left, ev in events:
+        for idx, (days_left, ev) in enumerate(events):
             badge = format_countdown_vi(days_left)
-            pub_tag = " • 🏖️ Nghỉ lễ" if ev.is_public_holiday else ""
+            badge_fmt = f"<b>{badge}</b>" if days_left == 0 else f"<i>{badge}</i>"
+            pub_tag = " • 🏖️ <b>Nghỉ lễ</b>" if ev.is_public_holiday else ""
             lines.append(
-                f"{ev.icon} <b>{html.escape(ev.name)}</b> — <b>{badge}</b>{pub_tag}\n"
-                f"  📅 {format_solar_date_vi(ev.solar_date, include_weekday=True)} "
-                f"(ÂL: {ev.lunar_date.format_short()})"
+                f"{ev.icon} <b>{html.escape(ev.name)}</b> — {badge_fmt}\n"
+                f"• {format_solar_date_vi(ev.solar_date, include_weekday=True)} • "
+                f"ÂL: <b>{ev.lunar_date.format_short()}</b>{pub_tag}"
             )
+            if idx < len(events) - 1:
+                lines.append("")
 
+        lines.append("")
+        lines.append("<i>Gõ /lunar DD/MM để xem chi tiết ngày tốt xấu</i>")
         return self._truncate_message(lines)
 
     def _cmd_lunar_good(self, ctx: CommandContext) -> str:
@@ -294,19 +299,24 @@ class LunarCalendarFeature(BaseFeature):
 
         lines = [
             f"✨ <b>NGÀY TỐT / HOÀNG ĐẠO ({days_ahead} NGÀY TỚI)</b>",
-            f"<i>Tìm thấy {len(good_days)} ngày Hoàng Đạo</i>",
+            f"<i>Tính từ {format_solar_date_vi(today, include_weekday=True)} • Tìm thấy {len(good_days)} ngày Hoàng Đạo</i>",
             "",
         ]
-        for days_left, info in good_days:
+        for idx, (days_left, info) in enumerate(good_days):
             badge = format_countdown_vi(days_left)
+            badge_fmt = f"<b>{badge}</b>" if days_left == 0 else f"<i>{badge}</i>"
             hours_text = ", ".join(info.auspicious_hours[:4]) + "…"
             lines.append(
-                f"🌟 <b>{format_solar_date_vi(info.solar, include_weekday=True)}</b> ({badge})\n"
-                f"  🌙 ÂL: <b>{info.lunar.format_short()}</b> • Ngày {info.day_can_chi}\n"
-                f"  ⭐ {info.star_name} Hoàng Đạo • Trực {info.truc_name} ({html.escape(info.truc_note)})\n"
-                f"  ⏰ Giờ tốt: {hours_text}"
+                f"🌟 <b>{format_solar_date_vi(info.solar, include_weekday=True)}</b> — {badge_fmt}\n"
+                f"• Âm lịch: <b>{info.lunar.format_short()}</b> • Ngày <b>{info.day_can_chi}</b>\n"
+                f"• Sao <b>{info.star_name}</b> • Trực <b>{info.truc_name}</b> — <i>{html.escape(info.truc_note)}</i>\n"
+                f"• Giờ tốt: {hours_text}"
             )
+            if idx < len(good_days) - 1:
+                lines.append("")
 
+        lines.append("")
+        lines.append("<i>Gõ /lunar DD/MM để xem đầy đủ 6 giờ Hoàng Đạo & chi tiết ngày</i>")
         return self._truncate_message(lines)
 
     def _cmd_lunar_status(self, _ctx: CommandContext) -> str:
@@ -334,21 +344,23 @@ class LunarCalendarFeature(BaseFeature):
         if upcoming:
             next_days, next_ev = upcoming[0]
             next_text = (
-                f"{next_ev.icon} <b>{html.escape(next_ev.name)}</b> "
-                f"({format_countdown_vi(next_days)} — {format_solar_date_vi(next_ev.solar_date)})"
+                f"{next_ev.icon} <b>{html.escape(next_ev.name)}</b> — "
+                f"<i>{format_countdown_vi(next_days)}</i> ({format_solar_date_vi(next_ev.solar_date)})"
             )
         else:
-            next_text = "Không có trong 60 ngày tới"
+            next_text = "<i>Không có trong 60 ngày tới</i>"
 
         return (
             f"🌙 <b>TRẠNG THÁI LỊCH ÂM & NGÀY LỄ</b>\n\n"
             f"Trạng thái: <b>{enabled_text}</b>\n"
             f"Hôm nay: <b>{format_solar_date_vi(today, include_weekday=True)}</b>\n"
-            f"Âm lịch: <b>{info.lunar.format_vi()}</b>\n"
-            f"Giờ nhắc hằng ngày: <b>{schedule_text}</b>\n"
-            f"Nhắc ngày lễ: <b>{holiday_leads}</b>\n"
-            f"Nhắc Rằm / Mùng 1: <b>{moon_leads}</b>\n"
-            f"Sự kiện gần nhất: {next_text}"
+            f"Âm lịch: <b>{info.lunar.format_vi()}</b>\n\n"
+            f"⏰ <b>Cấu hình nhắc nhở:</b>\n"
+            f"• Giờ nhắc hằng ngày: <b>{schedule_text}</b>\n"
+            f"• Nhắc ngày lễ: <b>{holiday_leads}</b>\n"
+            f"• Nhắc Rằm / Mùng 1: <b>{moon_leads}</b>\n\n"
+            f"🔔 <b>Sự kiện gần nhất:</b>\n"
+            f"• {next_text}"
         )
 
     @staticmethod
@@ -459,38 +471,49 @@ class LunarCalendarFeature(BaseFeature):
         status_icon = "🟢" if info.is_hoang_dao else "🔴"
         day_type = "Ngày Hoàng Đạo (Ngày tốt)" if info.is_hoang_dao else "Ngày Hắc Đạo"
         diff = (info.solar - today).days
-        diff_badge = f" ({format_countdown_vi(diff)})" if diff != 0 else " (Hôm nay)"
-        title = "🔄 <b>ĐỔI LỊCH ÂM → DƯƠNG</b>" if converted_from_lunar else "🌙 <b>LỊCH VẠN NIÊN</b>"
+        diff_label = format_countdown_vi(diff) if diff != 0 else "Hôm nay"
+        date_short = format_solar_date_vi(info.solar)
+        title = (
+            f"🔄 <b>ĐỔI LỊCH ÂM → DƯƠNG — {date_short}</b>"
+            if converted_from_lunar
+            else f"🌙 <b>LỊCH VẠN NIÊN — {date_short}</b>"
+        )
 
         lines = [
-            f"{title}",
+            title,
+            f"<i>{diff_label}</i>",
             "",
-            f"📅 Dương lịch: <b>{format_solar_date_vi(info.solar, include_weekday=True)}</b>{diff_badge}",
-            f"🌙 Âm lịch: <b>{info.lunar.format_vi()}</b> ({info.lunar.format_short(include_year=True)})",
-            f"🏮 Can Chi: Ngày <b>{info.day_can_chi}</b> • Tháng <b>{info.month_can_chi}</b> • Năm <b>{info.year_can_chi}</b>",
-            f"🌿 Tiết khí: <b>{info.solar_term}</b>",
-            f"{status_icon} {day_type} — Sao <b>{info.star_name}</b>",
-            f"🧭 Trực <b>{info.truc_name}</b>: <i>{html.escape(info.truc_note)}</i>",
-            f"⏰ Giờ Hoàng Đạo: {', '.join(info.auspicious_hours)}",
+            "📅 <b>Lịch Âm Dương:</b>",
+            f"• Dương lịch: <b>{format_solar_date_vi(info.solar, include_weekday=True)}</b>",
+            f"• Âm lịch: <b>{info.lunar.format_vi()}</b> ({info.lunar.format_short(include_year=True)})",
+            f"• Can Chi: Ngày <b>{info.day_can_chi}</b> • Tháng <b>{info.month_can_chi}</b> • Năm <b>{info.year_can_chi}</b>",
+            f"• Tiết khí: <b>{info.solar_term}</b>",
+            "",
+            "🧭 <b>Ngày tốt xấu & Giờ Hoàng Đạo:</b>",
+            f"• Đánh giá: {status_icon} <b>{day_type}</b> — Sao <b>{info.star_name}</b>",
+            f"• Trực <b>{info.truc_name}</b> — <i>{html.escape(info.truc_note)}</i>",
+            f"• Giờ Hoàng Đạo: {', '.join(info.auspicious_hours)}",
         ]
 
         if day_events:
             lines.append("")
             lines.append("🎉 <b>Sự kiện / Ngày lễ trong ngày:</b>")
             for ev in day_events:
-                pub_tag = " <i>(Nghỉ lễ)</i>" if ev.is_public_holiday else ""
-                lines.append(f"• {ev.icon} <b>{html.escape(ev.name)}</b>{pub_tag}")
-                if ev.note:
-                    lines.append(f"  <i>{html.escape(ev.note)}</i>")
+                pub_tag = " • 🏖️ <b>Nghỉ lễ</b>" if ev.is_public_holiday else ""
+                note_part = f" — <i>{html.escape(ev.note)}</i>" if ev.note else ""
+                lines.append(f"• {ev.icon} <b>{html.escape(ev.name)}</b>{pub_tag}{note_part}")
 
         if nearest_next is not None:
             next_days, next_ev = nearest_next
             lines.append("")
+            lines.append("🔔 <b>Sự kiện sắp tới:</b>")
             lines.append(
-                f"🔔 Sắp tới: {next_ev.icon} <b>{html.escape(next_ev.name)}</b> "
-                f"— <b>{format_countdown_vi(next_days)}</b> ({format_solar_date_vi(next_ev.solar_date)})"
+                f"• {next_ev.icon} <b>{html.escape(next_ev.name)}</b> — "
+                f"<i>{format_countdown_vi(next_days)}</i> ({format_solar_date_vi(next_ev.solar_date)})"
             )
 
+        lines.append("")
+        lines.append("<i>Gõ /lunar_upcoming hoặc /lunar_good để xem lịch sắp tới</i>")
         return "\n".join(lines)
 
     @staticmethod
@@ -501,39 +524,44 @@ class LunarCalendarFeature(BaseFeature):
         today_events = [(d, ev) for d, ev, _ in due_alerts if d == 0]
         upcoming_events = [(d, ev) for d, ev, _ in due_alerts if d > 0]
 
+        status_icon = "🟢" if today_info.is_hoang_dao else "🔴"
         status_label = (
-            f"Hoàng Đạo ({today_info.star_name})"
+            f"{status_icon} Hoàng Đạo ({today_info.star_name})"
             if today_info.is_hoang_dao
-            else f"Hắc Đạo ({today_info.star_name})"
+            else f"{status_icon} Hắc Đạo ({today_info.star_name})"
         )
         lines = [
             f"🌙 <b>NHẮC LỊCH ÂM & NGÀY LỄ — {format_solar_date_vi(today_info.solar)}</b>",
-            f"<i>Âm lịch hôm nay: {today_info.lunar.format_vi()} • Ngày {today_info.day_can_chi} ({status_label})</i>",
+            f"<i>ÂL hôm nay: {today_info.lunar.format_vi()} • Ngày {today_info.day_can_chi} • {status_label}</i>",
             "",
         ]
 
         if today_events:
             lines.append("✨ <b>DIỄN RA HÔM NAY:</b>")
             for _, ev in today_events:
-                pub_tag = " • 🏖️ Nghỉ lễ" if ev.is_public_holiday else ""
-                lines.append(f"• {ev.icon} <b>{html.escape(ev.name)}</b>{pub_tag}")
-                if ev.note:
-                    lines.append(f"  <i>{html.escape(ev.note)}</i>")
+                pub_tag = " • 🏖️ <b>Nghỉ lễ</b>" if ev.is_public_holiday else ""
+                note_part = f" — <i>{html.escape(ev.note)}</i>" if ev.note else ""
+                lines.append(f"• {ev.icon} <b>{html.escape(ev.name)}</b>{pub_tag}{note_part}")
             lines.append("")
 
         if upcoming_events:
             lines.append("📅 <b>SẮP DIỄN RA:</b>")
-            for days_left, ev in upcoming_events:
+            for idx, (days_left, ev) in enumerate(upcoming_events):
                 badge = format_countdown_vi(days_left)
-                pub_tag = " • 🏖️ Nghỉ lễ" if ev.is_public_holiday else ""
+                pub_tag = " • 🏖️ <b>Nghỉ lễ</b>" if ev.is_public_holiday else ""
                 lines.append(
-                    f"• {ev.icon} <b>{html.escape(ev.name)}</b> — <b>{badge}</b>{pub_tag}\n"
-                    f"  📅 {format_solar_date_vi(ev.solar_date, include_weekday=True)} "
-                    f"(ÂL: {ev.lunar_date.format_short()})"
+                    f"{ev.icon} <b>{html.escape(ev.name)}</b> — <i>{badge}</i>\n"
+                    f"• {format_solar_date_vi(ev.solar_date, include_weekday=True)} • "
+                    f"ÂL: <b>{ev.lunar_date.format_short()}</b>{pub_tag}"
                 )
+                if idx < len(upcoming_events) - 1:
+                    lines.append("")
             lines.append("")
 
-        lines.append(f"⏰ <b>Giờ Hoàng Đạo hôm nay:</b> {', '.join(today_info.auspicious_hours)}")
+        lines.append("⏰ <b>Giờ Hoàng Đạo hôm nay:</b>")
+        lines.append(f"• {', '.join(today_info.auspicious_hours)}")
+        lines.append("")
+        lines.append("<i>Gõ /lunar để xem chi tiết đầy đủ</i>")
         return LunarCalendarFeature._truncate_message(lines)
 
     @staticmethod
@@ -550,5 +578,8 @@ class LunarCalendarFeature(BaseFeature):
             current_len += added_len
 
         if truncated:
-            output.append("\n<i>… (đã rút gọn do vượt giới hạn ký tự Telegram)</i>")
+            while output and not output[-1]:
+                output.pop()
+            output.append("")
+            output.append("<i>… (đã rút gọn do vượt giới hạn ký tự Telegram)</i>")
         return "\n".join(output).strip()
