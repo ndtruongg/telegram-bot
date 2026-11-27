@@ -13,6 +13,9 @@ DEFAULT_NEWS_RSS_URLS: tuple[str, ...] = (
 
 DEFAULT_REMINDER_LEAD_DAYS: tuple[int, ...] = (7, 3, 1, 0)
 
+DEFAULT_LUNAR_LEAD_DAYS: tuple[int, ...] = (3, 1, 0)
+DEFAULT_LUNAR_MOON_LEAD_DAYS: tuple[int, ...] = (1, 0)
+
 DEFAULT_VOCAB_SEND_TIMES: tuple[tuple[int, int], ...] = ((8, 0), (20, 0))
 DEFAULT_VOCAB_TOPICS: tuple[str, ...] = ("it", "communication", "ielts", "mixed")
 DEFAULT_GEMINI_MODEL: str = "gemini-3.5-flash-lite"
@@ -172,6 +175,17 @@ class DailyVocabConfig:
 
 
 @dataclass(frozen=True)
+class LunarCalendarConfig:
+    enabled: bool = True
+    send_hour: int = 7
+    send_minute: int = 0
+    timezone: str = "Asia/Ho_Chi_Minh"
+    lead_days: tuple[int, ...] = DEFAULT_LUNAR_LEAD_DAYS
+    moon_lead_days: tuple[int, ...] = DEFAULT_LUNAR_MOON_LEAD_DAYS
+    check_interval: int = 60
+
+
+@dataclass(frozen=True)
 class Settings:
     telegram_token: str
     telegram_chat_id: str
@@ -180,6 +194,7 @@ class Settings:
     morning_news: MorningNewsConfig = field(default_factory=MorningNewsConfig)
     reminders: RemindersConfig = field(default_factory=RemindersConfig)
     daily_vocab: DailyVocabConfig = field(default_factory=DailyVocabConfig)
+    lunar_calendar: LunarCalendarConfig = field(default_factory=LunarCalendarConfig)
     state_file: str = ".bot_state.json"
     bot_state_json: str = ""
     telegram_webhook_secret: str = ""
@@ -226,6 +241,17 @@ class Settings:
         vocab_send_times = _parse_send_times(_env("VOCAB_SEND_TIMES", ""))
         vocab_check_interval = max(60, int(_env("VOCAB_CHECK_INTERVAL", "60")))
         vocab_max_history = max(20, min(1000, int(_env("VOCAB_MAX_HISTORY", "300"))))
+        lunar_send_hour = max(0, min(23, int(_env("LUNAR_SEND_HOUR", "7"))))
+        lunar_send_minute = max(0, min(59, int(_env("LUNAR_SEND_MINUTE", "0"))))
+        lunar_check_interval = max(60, int(_env("LUNAR_CHECK_INTERVAL", "60")))
+        lunar_lead_days = _parse_lead_days(
+            _env("LUNAR_LEAD_DAYS", ""),
+            default=DEFAULT_LUNAR_LEAD_DAYS,
+        )
+        lunar_moon_lead_days = _parse_lead_days(
+            _env("LUNAR_MOON_LEAD_DAYS", ""),
+            default=DEFAULT_LUNAR_MOON_LEAD_DAYS,
+        )
         gemini_api_key = os.getenv("GEMINI_API_KEY", "").strip()
         gemini_model = _env("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
 
@@ -271,6 +297,15 @@ class Settings:
                 gemini_api_key=gemini_api_key,
                 gemini_model=gemini_model,
                 history_json=os.getenv("VOCAB_HISTORY", "").strip(),
+            ),
+            lunar_calendar=LunarCalendarConfig(
+                enabled=_env_bool("LUNAR_ENABLED", True),
+                send_hour=lunar_send_hour,
+                send_minute=lunar_send_minute,
+                timezone=_env("LUNAR_TIMEZONE", "Asia/Ho_Chi_Minh"),
+                lead_days=lunar_lead_days,
+                moon_lead_days=lunar_moon_lead_days,
+                check_interval=lunar_check_interval,
             ),
             state_file=state_file,
             bot_state_json=os.getenv("BOT_STATE_JSON", "").strip(),

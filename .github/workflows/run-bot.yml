@@ -74,6 +74,12 @@ jobs:
           VOCAB_TIMEZONE: ${{ vars.VOCAB_TIMEZONE }}
           VOCAB_MAX_HISTORY: ${{ vars.VOCAB_MAX_HISTORY }}
           VOCAB_HISTORY: ${{ vars.VOCAB_HISTORY }}
+          LUNAR_ENABLED: ${{ vars.LUNAR_ENABLED }}
+          LUNAR_SEND_HOUR: ${{ vars.LUNAR_SEND_HOUR }}
+          LUNAR_SEND_MINUTE: ${{ vars.LUNAR_SEND_MINUTE }}
+          LUNAR_TIMEZONE: ${{ vars.LUNAR_TIMEZONE }}
+          LUNAR_LEAD_DAYS: ${{ vars.LUNAR_LEAD_DAYS }}
+          LUNAR_MOON_LEAD_DAYS: ${{ vars.LUNAR_MOON_LEAD_DAYS }}
           BOT_STATE_JSON: ${{ vars.BOT_STATE_JSON }}
           STATE_FILE: .bot_state.json
           INPUT_FEATURE: ${{ inputs.feature }}

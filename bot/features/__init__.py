@@ -9,6 +9,7 @@ from bot.core.state import StateStore
 from bot.core.telegram_client import TelegramClient
 from bot.features.daily_vocab import DailyVocabFeature
 from bot.features.gold_price import GoldPriceFeature
+from bot.features.lunar_calendar import LunarCalendarFeature
 from bot.features.morning_news import MorningNewsFeature
 from bot.features.reminders import RemindersFeature
 
@@ -62,6 +63,15 @@ def load_features(
                 config=settings.daily_vocab,
                 state_store=state_store,
                 github_vars=github_vars,
+            )
+        )
+
+    if settings.lunar_calendar.enabled or include_disabled:
+        features.append(
+            LunarCalendarFeature(
+                telegram=telegram,
+                config=settings.lunar_calendar,
+                state_store=state_store,
             )
         )
 

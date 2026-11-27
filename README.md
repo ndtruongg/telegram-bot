@@ -41,10 +41,14 @@ Bot Telegram được tổ chức theo kiến trúc module hóa, mỗi tính nă
 │   │   │   ├── models.py           # Mô hình sự kiện, tính lặp lại & JSON
 │   │   │   ├── parser.py           # Parse ngày/giờ linh hoạt (DD/MM, +3d, ngaymai...)
 │   │   │   └── feature.py          # Lập lịch nhắc tự động & lệnh /remind_*, /countdown
-│   │   └── daily_vocab/            # Tính năng từ vựng tiếng Anh mỗi ngày (sáng/tối)
-│   │       ├── models.py           # Chủ đề (IT/Giao tiếp/IELTS) & lưu lịch sử chống trùng
-│   │       ├── generator.py        # Tạo từ vựng + ví dụ bằng Gemini AI (kèm kho dự phòng)
-│   │       └── feature.py          # Lập lịch sáng/tối & lệnh /vocab_*
+│   │   ├── daily_vocab/            # Tính năng từ vựng tiếng Anh mỗi ngày (sáng/tối)
+│   │   │   ├── models.py           # Chủ đề (IT/Giao tiếp/IELTS) & lưu lịch sử chống trùng
+│   │   │   ├── generator.py        # Tạo từ vựng + ví dụ bằng Gemini AI (kèm kho dự phòng)
+│   │   │   └── feature.py          # Lập lịch sáng/tối & lệnh /vocab_*
+│   │   └── lunar_calendar/         # Tính năng lịch âm, ngày tốt & nhắc Rằm/Mùng 1/ngày lễ VN
+│   │       ├── calendar.py         # Thuật toán lịch âm Việt Nam (UTC+7), Can Chi, Hoàng Đạo
+│   │       ├── events.py           # Danh sách ngày lễ VN (âm/dương), Rằm, Mùng 1 & ngày tốt
+│   │       └── feature.py          # Tự động nhắc hằng ngày & lệnh /lunar, /lunar_*
 │   └── utils/                      # Hàm tiện ích dùng chung
 │       └── parsers.py              # Parse & format giá tiền
 └── tests/
@@ -119,6 +123,10 @@ Repo đã có sẵn workflow [.github/workflows/run-bot.yml](.github/workflows/r
    - `VOCAB_SEND_TIMES` (mặc định `08:00,20:00` theo `Asia/Ho_Chi_Minh`)
    - `VOCAB_MAX_HISTORY` (mặc định `300` từ lưu lịch sử chống trùng lặp)
    - `VOCAB_HISTORY` *(tự động tạo/cập nhật qua GitHub Variable khi dùng webhook/cron)*
+   - `LUNAR_ENABLED` (mặc định `true`)
+   - `LUNAR_SEND_HOUR` / `LUNAR_SEND_MINUTE` (mặc định `7` / `0` theo `Asia/Ho_Chi_Minh`)
+   - `LUNAR_LEAD_DAYS` (mặc định `3,1,0` — nhắc trước 3, 1 ngày và đúng ngày lễ Việt Nam)
+   - `LUNAR_MOON_LEAD_DAYS` (mặc định `1,0` — nhắc trước 1 ngày và đúng ngày Rằm, Mùng 1)
    - `LOG_LEVEL` (mặc định `INFO`)
 4. Vào tab **Actions → Run Telegram Bot Hourly → Run workflow** để chạy thử ngay.
 
@@ -141,6 +149,10 @@ Bot hỗ trợ các lệnh phản hồi tức thì qua Webhook (Telegram chỉ c
 - `/vocab_history [số lượng]`: Xem lại các từ vựng đã học gần đây để ôn tập nhanh.
 - `/vocab_reset`: Xoá lịch sử từ vựng đã học để học lại từ đầu.
 - `/vocab_status`: Xem khung giờ gửi sáng/tối, chủ đề, trạng thái AI và số từ trong lịch sử.
+- `/lunar [DD/MM[/YYYY] [am]]`: Xem lịch âm dương, Can Chi, Tiết khí, Ngày Hoàng Đạo/Hắc Đạo, Trực & Giờ Hoàng Đạo hôm nay hoặc đổi ngày bất kỳ (hỗ trợ cả đổi Âm → Dương như `/lunar 15/08 am`).
+- `/lunar_upcoming [số ngày]`: Xem danh sách ngày Rằm, Mùng 1 âm lịch và ngày lễ Việt Nam sắp tới (mặc định 45 ngày).
+- `/lunar_good [số ngày]`: Xem các ngày Hoàng Đạo (ngày tốt) sắp tới kèm sao, Trực và giờ tốt (mặc định 14 ngày).
+- `/lunar_status`: Xem trạng thái & cấu hình nhắc lịch âm / ngày lễ.
 
 ### Cách triển khai Webhook (khuyến nghị Vercel — miễn phí)
 
