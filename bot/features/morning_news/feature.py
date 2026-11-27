@@ -34,6 +34,7 @@ class MorningNewsFeature(BaseFeature):
         summarizer: Callable[[list[NewsArticle]], NewsDigest] | None = None,
         state_store: StateStore | None = None,
         now_provider: Callable[[ZoneInfo], datetime] | None = None,
+        suppress_scheduled: bool = False,
     ) -> None:
         super().__init__(telegram)
         self._config = config
@@ -50,6 +51,7 @@ class MorningNewsFeature(BaseFeature):
         )
         self._state_store = state_store
         self._now_provider = now_provider or (lambda tz: datetime.now(tz))
+        self._suppress_scheduled = suppress_scheduled
         self._last_sent_date: str | None = (
             state_store.get(self.name, self._STATE_KEY_LAST_SENT_DATE)
             if state_store is not None
@@ -93,6 +95,12 @@ class MorningNewsFeature(BaseFeature):
         )
 
     def execute(self) -> None:
+        if self._suppress_scheduled:
+            logger.info(
+                "Bản tin sáng đã được gộp vào morning_briefing, bỏ qua gửi riêng."
+            )
+            return
+
         tz = self._get_timezone()
         now = self._now_provider(tz)
         today_str = now.date().isoformat()

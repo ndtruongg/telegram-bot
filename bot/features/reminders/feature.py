@@ -45,12 +45,14 @@ class RemindersFeature(BaseFeature):
         state_store: StateStore | None = None,
         github_vars: GitHubVariablesClient | None = None,
         now_provider: Callable[[ZoneInfo], datetime] | None = None,
+        suppress_morning_digest: bool = False,
     ) -> None:
         super().__init__(telegram)
         self._config = config
         self._state_store = state_store
         self._github_vars = github_vars
         self._now_provider = now_provider or (lambda tz: datetime.now(tz))
+        self._suppress_morning_digest = suppress_morning_digest
 
         self._items: list[ReminderItem] = self._load_initial_items()
         self._sent_notifications: dict[str, str] = self._load_sent_notifications()
@@ -181,9 +183,13 @@ class RemindersFeature(BaseFeature):
             logger.info("Chưa có nhắc việc hoặc sự kiện nào được cấu hình.")
             return
 
-        send_morning_now = (now.hour, now.minute) >= (
-            self._config.send_hour,
-            self._config.send_minute,
+        # Re-read shared sent notifications in case morning_briefing recorded them in the same run
+        if self._state_store is not None:
+            self._sent_notifications = self._load_sent_notifications()
+
+        send_morning_now = (
+            not self._suppress_morning_digest
+            and (now.hour, now.minute) >= (self._config.send_hour, self._config.send_minute)
         )
 
         due_timed: list[tuple[ReminderItem, date, str]] = []

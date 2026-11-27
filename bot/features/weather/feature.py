@@ -87,6 +87,7 @@ class WeatherFeature(BaseFeature):
         state_store: StateStore | None = None,
         github_vars: GitHubVariablesClient | None = None,
         now_provider: Callable[[ZoneInfo], datetime] | None = None,
+        suppress_morning_digest: bool = False,
     ) -> None:
         super().__init__(telegram)
         self._config = config
@@ -95,6 +96,7 @@ class WeatherFeature(BaseFeature):
         self._state_store = state_store
         self._github_vars = github_vars
         self._now_provider = now_provider or (lambda tz: datetime.now(tz))
+        self._suppress_morning_digest = suppress_morning_digest
 
         self._city: str = self._load_initial_city()
         self._last_sent_date: str | None = self._load_str_state(self._STATE_KEY_LAST_SENT_DATE)
@@ -231,9 +233,15 @@ class WeatherFeature(BaseFeature):
         today_str = now.date().isoformat()
 
         morning_due = (
-            self._last_sent_date != today_str
+            not self._suppress_morning_digest
+            and self._last_sent_date != today_str
             and (now.hour, now.minute) >= (self._config.send_hour, self._config.send_minute)
         )
+        # Re-read shared alert timestamps in case morning_briefing updated them in the same run
+        if self._state_store is not None:
+            self._last_alert_check_at = self._load_str_state(self._STATE_KEY_LAST_ALERT_CHECK)
+            self._last_rain_alert_at = self._load_str_state(self._STATE_KEY_LAST_RAIN_ALERT)
+            self._last_aqi_alert_at = self._load_str_state(self._STATE_KEY_LAST_AQI_ALERT)
         alert_due = self._is_alert_check_due(now)
 
         if not morning_due and not alert_due:

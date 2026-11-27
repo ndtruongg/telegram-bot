@@ -217,6 +217,21 @@ class WeatherConfig:
 
 
 @dataclass(frozen=True)
+class MorningBriefingConfig:
+    enabled: bool = True
+    send_hour: int = 7
+    send_minute: int = 0
+    timezone: str = "Asia/Ho_Chi_Minh"
+    check_interval: int = 60
+    max_news_items: int = 5
+    include_weather: bool = True
+    include_gold: bool = True
+    include_news: bool = True
+    include_reminders: bool = True
+    suppress_individual: bool = True
+
+
+@dataclass(frozen=True)
 class Settings:
     telegram_token: str
     telegram_chat_id: str
@@ -227,6 +242,7 @@ class Settings:
     daily_vocab: DailyVocabConfig = field(default_factory=DailyVocabConfig)
     lunar_calendar: LunarCalendarConfig = field(default_factory=LunarCalendarConfig)
     weather: WeatherConfig = field(default_factory=WeatherConfig)
+    morning_briefing: MorningBriefingConfig = field(default_factory=MorningBriefingConfig)
     state_file: str = ".bot_state.json"
     bot_state_json: str = ""
     telegram_webhook_secret: str = ""
@@ -298,6 +314,10 @@ class Settings:
         weather_rain_alert_mm = max(0.5, float(_env("WEATHER_RAIN_ALERT_MM", "5.0")))
         weather_rain_alert_prob = max(10, min(100, int(_env("WEATHER_RAIN_ALERT_PROB", "75"))))
         weather_aqi_threshold = max(50, min(500, int(_env("WEATHER_AQI_THRESHOLD", "151"))))
+        briefing_send_hour = max(0, min(23, int(_env("BRIEFING_SEND_HOUR", "7"))))
+        briefing_send_minute = max(0, min(59, int(_env("BRIEFING_SEND_MINUTE", "0"))))
+        briefing_check_interval = max(60, int(_env("BRIEFING_CHECK_INTERVAL", "60")))
+        briefing_max_news = max(1, min(12, int(_env("BRIEFING_MAX_NEWS", "5"))))
         gemini_api_key = os.getenv("GEMINI_API_KEY", "").strip()
         gemini_model = _env("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
 
@@ -371,6 +391,19 @@ class Settings:
                 rain_alert_mm=weather_rain_alert_mm,
                 rain_alert_prob=weather_rain_alert_prob,
                 aqi_alert_threshold=weather_aqi_threshold,
+            ),
+            morning_briefing=MorningBriefingConfig(
+                enabled=_env_bool("BRIEFING_ENABLED", True),
+                send_hour=briefing_send_hour,
+                send_minute=briefing_send_minute,
+                timezone=_env("BRIEFING_TIMEZONE", "Asia/Ho_Chi_Minh"),
+                check_interval=briefing_check_interval,
+                max_news_items=briefing_max_news,
+                include_weather=_env_bool("BRIEFING_INCLUDE_WEATHER", True),
+                include_gold=_env_bool("BRIEFING_INCLUDE_GOLD", True),
+                include_news=_env_bool("BRIEFING_INCLUDE_NEWS", True),
+                include_reminders=_env_bool("BRIEFING_INCLUDE_REMINDERS", True),
+                suppress_individual=_env_bool("BRIEFING_SUPPRESS_INDIVIDUAL", True),
             ),
             state_file=state_file,
             bot_state_json=os.getenv("BOT_STATE_JSON", "").strip(),

@@ -49,9 +49,11 @@ Bot Telegram được tổ chức theo kiến trúc module hóa, mỗi tính nă
 │   │   │   ├── calendar.py         # Thuật toán lịch âm Việt Nam (UTC+7), Can Chi, Hoàng Đạo
 │   │   │   ├── events.py           # Danh sách ngày lễ VN (âm/dương), Rằm, Mùng 1 & ngày tốt
 │   │   │   └── feature.py          # Tự động nhắc hằng ngày & lệnh /lunar, /lunar_*
-│   │   └── weather/                # Tính năng thời tiết & chất lượng không khí (Open-Meteo)
-│   │       ├── client.py           # Gọi Open-Meteo Forecast/AQI/Geocoding & phân tích mưa/UV/AQI
-│   │       └── feature.py          # Dự báo sáng sớm, cảnh báo mưa lớn/AQI xấu & lệnh /weather*
+│   │   ├── weather/                # Tính năng thời tiết & chất lượng không khí (Open-Meteo)
+│   │   │   ├── client.py           # Gọi Open-Meteo Forecast/AQI/Geocoding & phân tích mưa/UV/AQI
+│   │   │   └── feature.py          # Dự báo sáng sớm, cảnh báo mưa lớn/AQI xấu & lệnh /weather*
+│   │   └── morning_briefing/       # Bản tin tổng hợp buổi sáng (Thời tiết + Giá vàng + Nhắc việc + Tin tức)
+│   │       └── feature.py          # Gộp chung 1 tin nhắn lúc 07:00 sáng & lệnh /briefing*
 │   └── utils/                      # Hàm tiện ích dùng chung
 │       └── parsers.py              # Parse & format giá tiền
 └── tests/
@@ -136,6 +138,10 @@ Repo đã có sẵn workflow [.github/workflows/run-bot.yml](.github/workflows/r
    - `WEATHER_ALERTS_ENABLED` (mặc định `true` — cảnh báo tự động mưa lớn & AQI xấu)
    - `WEATHER_RAIN_ALERT_MM` / `WEATHER_RAIN_ALERT_PROB` (mặc định `5.0` mm/h / `75`% trong `3` giờ tới)
    - `WEATHER_AQI_THRESHOLD` (mặc định `151` theo chuẩn US AQI)
+   - `BRIEFING_ENABLED` (mặc định `true` — gộp Thời tiết + Giá vàng + Nhắc việc + Tin tức vào 1 tin lúc `07:00`)
+   - `BRIEFING_SEND_HOUR` / `BRIEFING_SEND_MINUTE` (mặc định `7` / `0` theo `Asia/Ho_Chi_Minh`)
+   - `BRIEFING_MAX_NEWS` (mặc định `5` tin nổi bật trong bản tin tổng hợp)
+   - `BRIEFING_SUPPRESS_INDIVIDUAL` (mặc định `true` — tự tắt gửi rời rạc tin sáng của thời tiết/tin tức/nhắc việc)
    - `LOG_LEVEL` (mặc định `INFO`)
 4. Vào tab **Actions → Run Telegram Bot Hourly → Run workflow** để chạy thử ngay.
 
@@ -165,6 +171,8 @@ Bot hỗ trợ các lệnh phản hồi tức thì qua Webhook (Telegram chỉ c
 - `/weather [thành phố]`: Xem dự báo thời tiết, nhiệt độ, xác suất mưa, UV, AQI (PM2.5/PM10) và tư vấn có cần mang áo mưa không (mặc định theo `WEATHER_CITY` hoặc thành phố bất kỳ như `/weather Hà Nội`, `/weather Đà Nẵng`, `/weather Tokyo`).
 - `/weather_city [thành phố]`: Xem hoặc đổi thành phố mặc định (đồng bộ GitHub Variable `WEATHER_CITY`).
 - `/weather_status`: Xem lịch gửi dự báo sáng sớm và các ngưỡng cảnh báo mưa lớn / AQI xấu.
+- `/briefing`: Xem ngay bản tin tổng hợp buổi sáng (Thời tiết + Giá vàng + Nhắc việc hôm nay + Tin tức nổi bật) trong 1 tin nhắn gọn đẹp.
+- `/briefing_status`: Xem lịch gửi, các mục đang gộp và trạng thái bản tin tổng hợp buổi sáng.
 
 ### Cách triển khai Webhook (khuyến nghị Vercel — miễn phí)
 

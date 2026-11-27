@@ -10,6 +10,7 @@ from bot.core.telegram_client import TelegramClient
 from bot.features.daily_vocab import DailyVocabFeature
 from bot.features.gold_price import GoldPriceFeature
 from bot.features.lunar_calendar import LunarCalendarFeature
+from bot.features.morning_briefing import MorningBriefingFeature
 from bot.features.morning_news import MorningNewsFeature
 from bot.features.reminders import RemindersFeature
 from bot.features.weather import WeatherFeature
@@ -27,6 +28,22 @@ def load_features(
     Khi thêm tính năng mới, chỉ cần import class tính năng và thêm vào danh sách bên dưới.
     """
     features: list[BaseFeature] = []
+    briefing_cfg = settings.morning_briefing
+    suppress_individual = briefing_cfg.enabled and briefing_cfg.suppress_individual
+
+    if briefing_cfg.enabled or include_disabled:
+        features.append(
+            MorningBriefingFeature(
+                telegram=telegram,
+                config=briefing_cfg,
+                weather_config=settings.weather,
+                gold_config=settings.gold_price,
+                news_config=settings.morning_news,
+                reminders_config=settings.reminders,
+                state_store=state_store,
+                github_vars=github_vars,
+            )
+        )
 
     if settings.gold_price.enabled or include_disabled:
         features.append(
@@ -44,6 +61,7 @@ def load_features(
                 telegram=telegram,
                 config=settings.morning_news,
                 state_store=state_store,
+                suppress_scheduled=suppress_individual and briefing_cfg.include_news,
             )
         )
 
@@ -54,6 +72,7 @@ def load_features(
                 config=settings.reminders,
                 state_store=state_store,
                 github_vars=github_vars,
+                suppress_morning_digest=suppress_individual and briefing_cfg.include_reminders,
             )
         )
 
@@ -83,6 +102,7 @@ def load_features(
                 config=settings.weather,
                 state_store=state_store,
                 github_vars=github_vars,
+                suppress_morning_digest=suppress_individual and briefing_cfg.include_weather,
             )
         )
 
