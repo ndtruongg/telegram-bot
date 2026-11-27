@@ -108,7 +108,7 @@ Repo đã có sẵn workflow [.github/workflows/run-bot.yml](.github/workflows/r
    - `NEWS_ENABLED` (mặc định `true`)
    - `NEWS_RSS_URLS` (mặc định `https://vnexpress.net/rss/tin-noi-bat.rss,https://tuoitre.vn/rss/tin-moi-nhat.rss`)
    - `NEWS_SEND_HOUR` / `NEWS_SEND_MINUTE` (mặc định `7` / `0` theo `Asia/Ho_Chi_Minh`)
-   - `GEMINI_MODEL` (mặc định `gemini-2.5-flash`)
+   - `GEMINI_MODEL` (mặc định `gemini-3.5-flash-lite`)
    - `REMINDERS_ENABLED` (mặc định `true`)
    - `REMINDERS_SEND_HOUR` / `REMINDERS_SEND_MINUTE` (mặc định `7` / `0` theo `Asia/Ho_Chi_Minh`)
    - `REMINDERS_LEAD_DAYS` (mặc định `7,3,1,0` — nhắc trước 7, 3, 1 ngày và đúng ngày)

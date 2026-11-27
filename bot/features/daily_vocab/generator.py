@@ -20,6 +20,11 @@ from bot.features.daily_vocab.models import (
 logger = logging.getLogger(__name__)
 
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
+DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite"
+FALLBACK_GEMINI_MODELS: tuple[str, ...] = (
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
+)
 _CODE_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.IGNORECASE)
 _MAX_PROMPT_EXCLUDES = 250
 
@@ -693,13 +698,22 @@ def build_fallback_batch(
     )
 
 
+def _normalize_model_candidates(model: str) -> list[str]:
+    primary = model.strip().removeprefix("models/").strip() or DEFAULT_GEMINI_MODEL
+    candidates: list[str] = [primary]
+    for fallback in FALLBACK_GEMINI_MODELS:
+        if fallback not in candidates:
+            candidates.append(fallback)
+    return candidates
+
+
 def generate_vocab_with_gemini(
     *,
     topic: str,
     count: int = 4,
     exclude_terms: Sequence[str] = (),
     api_key: str = "",
-    model: str = "gemini-2.5-flash",
+    model: str = DEFAULT_GEMINI_MODEL,
     timeout: int = 25,
     session: requests.Session | None = None,
 ) -> VocabBatch:
@@ -724,7 +738,6 @@ def generate_vocab_with_gemini(
         exclude_terms=exclude_terms,
         request_count=request_count,
     )
-    endpoint = f"{GEMINI_API_BASE}/{model}:generateContent"
     body = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {
@@ -738,59 +751,82 @@ def generate_vocab_with_gemini(
     }
 
     client = session or requests
-    try:
-        response = client.post(endpoint, headers=headers, json=body, timeout=timeout)
-        if response.status_code != 200:
+    candidates = _normalize_model_candidates(model)
+    last_http_status: int | None = None
+
+    for idx, candidate_model in enumerate(candidates):
+        endpoint = f"{GEMINI_API_BASE}/{candidate_model}:generateContent"
+        try:
+            response = client.post(endpoint, headers=headers, json=body, timeout=timeout)
+            if response.status_code == 404 and idx + 1 < len(candidates):
+                logger.warning(
+                    "Model Gemini '%s' trả về HTTP 404 (đã ngừng hỗ trợ hoặc không tồn tại), "
+                    "tự động thử sang '%s'.",
+                    candidate_model,
+                    candidates[idx + 1],
+                )
+                last_http_status = 404
+                continue
+
+            if response.status_code != 200:
+                logger.warning(
+                    "Gemini API trả về lỗi (%s) với model '%s': %s",
+                    response.status_code,
+                    candidate_model,
+                    response.text[:300],
+                )
+                return build_fallback_batch(
+                    resolved_topic,
+                    count=target_count,
+                    exclude_terms=exclude_terms,
+                    reason=f"Gemini API lỗi HTTP {response.status_code}",
+                )
+
+            payload = response.json()
+            raw_text = _extract_gemini_text(payload)
+            parsed_items = _parse_vocab_json(
+                raw_text,
+                topic=resolved_topic,
+                excluded_normalized=excluded_normalized,
+                limit=target_count,
+            )
+            if parsed_items:
+                if len(parsed_items) < target_count:
+                    # Top up any remaining slots from unseen curated entries so user still gets full count
+                    extra_excludes = list(exclude_terms) + [item.term for item in parsed_items]
+                    topup = build_fallback_batch(
+                        resolved_topic,
+                        count=target_count - len(parsed_items),
+                        exclude_terms=extra_excludes,
+                    )
+                    parsed_items.extend(topup.items)
+                return VocabBatch(
+                    topic=resolved_topic,
+                    items=tuple(parsed_items[:target_count]),
+                    used_ai=True,
+                )
+
             logger.warning(
-                "Gemini API trả về lỗi (%s): %s",
-                response.status_code,
-                response.text[:300],
+                "Không thể phân tích JSON hợp lệ hoặc toàn bộ từ bị trùng lịch sử, chuyển sang kho dự phòng."
             )
             return build_fallback_batch(
                 resolved_topic,
                 count=target_count,
                 exclude_terms=exclude_terms,
-                reason=f"Gemini API lỗi HTTP {response.status_code}",
+                reason="Phản hồi AI không hợp lệ hoặc trùng lịch sử",
+            )
+        except (requests.RequestException, ValueError) as exc:
+            logger.warning("Lỗi gọi Gemini API (%s), chuyển sang kho từ vựng dự phòng.", exc)
+            return build_fallback_batch(
+                resolved_topic,
+                count=target_count,
+                exclude_terms=exclude_terms,
+                reason="Không kết nối được Gemini API",
             )
 
-        payload = response.json()
-        raw_text = _extract_gemini_text(payload)
-        parsed_items = _parse_vocab_json(
-            raw_text,
-            topic=resolved_topic,
-            excluded_normalized=excluded_normalized,
-            limit=target_count,
-        )
-        if parsed_items:
-            if len(parsed_items) < target_count:
-                # Top up any remaining slots from unseen curated entries so user still gets full count
-                extra_excludes = list(exclude_terms) + [item.term for item in parsed_items]
-                topup = build_fallback_batch(
-                    resolved_topic,
-                    count=target_count - len(parsed_items),
-                    exclude_terms=extra_excludes,
-                )
-                parsed_items.extend(topup.items)
-            return VocabBatch(
-                topic=resolved_topic,
-                items=tuple(parsed_items[:target_count]),
-                used_ai=True,
-            )
-
-        logger.warning(
-            "Không thể phân tích JSON hợp lệ hoặc toàn bộ từ bị trùng lịch sử, chuyển sang kho dự phòng."
-        )
-        return build_fallback_batch(
-            resolved_topic,
-            count=target_count,
-            exclude_terms=exclude_terms,
-            reason="Phản hồi AI không hợp lệ hoặc trùng lịch sử",
-        )
-    except (requests.RequestException, ValueError) as exc:
-        logger.warning("Lỗi gọi Gemini API (%s), chuyển sang kho từ vựng dự phòng.", exc)
-        return build_fallback_batch(
-            resolved_topic,
-            count=target_count,
-            exclude_terms=exclude_terms,
-            reason="Không kết nối được Gemini API",
-        )
+    return build_fallback_batch(
+        resolved_topic,
+        count=target_count,
+        exclude_terms=exclude_terms,
+        reason=f"Gemini API lỗi HTTP {last_http_status or 404}",
+    )

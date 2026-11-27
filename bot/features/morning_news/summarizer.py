@@ -15,6 +15,11 @@ from bot.features.morning_news.rss import NewsArticle
 logger = logging.getLogger(__name__)
 
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
+DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite"
+FALLBACK_GEMINI_MODELS: tuple[str, ...] = (
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
+)
 _CODE_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.IGNORECASE)
 
 
@@ -170,11 +175,20 @@ def build_rss_fallback_digest(
     )
 
 
+def _normalize_model_candidates(model: str) -> list[str]:
+    primary = model.strip().removeprefix("models/").strip() or DEFAULT_GEMINI_MODEL
+    candidates: list[str] = [primary]
+    for fallback in FALLBACK_GEMINI_MODELS:
+        if fallback not in candidates:
+            candidates.append(fallback)
+    return candidates
+
+
 def summarize_with_gemini(
     articles: list[NewsArticle],
     *,
     api_key: str,
-    model: str = "gemini-2.5-flash",
+    model: str = DEFAULT_GEMINI_MODEL,
     max_highlights: int = 12,
     timeout: int = 25,
     session: requests.Session | None = None,
@@ -191,7 +205,6 @@ def summarize_with_gemini(
             reason="Chưa cấu hình GEMINI_API_KEY",
         )
 
-    endpoint = f"{GEMINI_API_BASE}/{model}:generateContent"
     prompt = _build_prompt(articles, max_highlights=min(max_highlights, len(articles)))
     body = {
         "contents": [{"parts": [{"text": prompt}]}],
@@ -206,36 +219,58 @@ def summarize_with_gemini(
     }
 
     client = session or requests
-    try:
-        response = client.post(endpoint, headers=headers, json=body, timeout=timeout)
-        if response.status_code != 200:
-            logger.warning(
-                "Gemini API trả về lỗi (%s): %s",
-                response.status_code,
-                response.text[:300],
-            )
+    candidates = _normalize_model_candidates(model)
+    last_http_status: int | None = None
+
+    for idx, candidate_model in enumerate(candidates):
+        endpoint = f"{GEMINI_API_BASE}/{candidate_model}:generateContent"
+        try:
+            response = client.post(endpoint, headers=headers, json=body, timeout=timeout)
+            if response.status_code == 404 and idx + 1 < len(candidates):
+                logger.warning(
+                    "Model Gemini '%s' trả về HTTP 404 (đã ngừng hỗ trợ hoặc không tồn tại), "
+                    "tự động thử sang '%s'.",
+                    candidate_model,
+                    candidates[idx + 1],
+                )
+                last_http_status = 404
+                continue
+
+            if response.status_code != 200:
+                logger.warning(
+                    "Gemini API trả về lỗi (%s) với model '%s': %s",
+                    response.status_code,
+                    candidate_model,
+                    response.text[:300],
+                )
+                return build_rss_fallback_digest(
+                    articles,
+                    max_highlights=max_highlights,
+                    reason=f"Gemini API lỗi HTTP {response.status_code}",
+                )
+
+            payload = response.json()
+            raw_text = _extract_gemini_text(payload)
+            digest = _parse_digest_json(raw_text, articles)
+            if digest is not None:
+                return digest
+
+            logger.warning("Không thể phân tích JSON từ Gemini API, chuyển sang tóm tắt RSS.")
             return build_rss_fallback_digest(
                 articles,
                 max_highlights=max_highlights,
-                reason=f"Gemini API lỗi HTTP {response.status_code}",
+                reason="Phản hồi AI không đúng định dạng",
+            )
+        except (requests.RequestException, ValueError) as exc:
+            logger.warning("Lỗi gọi Gemini API (%s), chuyển sang tóm tắt RSS.", exc)
+            return build_rss_fallback_digest(
+                articles,
+                max_highlights=max_highlights,
+                reason="Không kết nối được Gemini API",
             )
 
-        payload = response.json()
-        raw_text = _extract_gemini_text(payload)
-        digest = _parse_digest_json(raw_text, articles)
-        if digest is not None:
-            return digest
-
-        logger.warning("Không thể phân tích JSON từ Gemini API, chuyển sang tóm tắt RSS.")
-        return build_rss_fallback_digest(
-            articles,
-            max_highlights=max_highlights,
-            reason="Phản hồi AI không đúng định dạng",
-        )
-    except (requests.RequestException, ValueError) as exc:
-        logger.warning("Lỗi gọi Gemini API (%s), chuyển sang tóm tắt RSS.", exc)
-        return build_rss_fallback_digest(
-            articles,
-            max_highlights=max_highlights,
-            reason="Không kết nối được Gemini API",
-        )
+    return build_rss_fallback_digest(
+        articles,
+        max_highlights=max_highlights,
+        reason=f"Gemini API lỗi HTTP {last_http_status or 404}",
+    )

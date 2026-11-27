@@ -218,6 +218,51 @@ class TestDailyVocabGenerator(unittest.TestCase):
         self.assertFalse(batch_net.used_ai)
         self.assertEqual(len(batch_net.items), 3)
 
+    def test_gemini_404_auto_falls_back_to_active_model(self) -> None:
+        resp_404 = MagicMock(status_code=404, text="model no longer available")
+        resp_ok = MagicMock(status_code=200)
+        resp_ok.json.return_value = {
+            "candidates": [
+                {
+                    "content": {
+                        "parts": [
+                            {
+                                "text": json.dumps(
+                                    {
+                                        "items": [
+                                            {
+                                                "term": "refactor",
+                                                "phonetic": "/ˌriːˈfæk.tər/",
+                                                "part_of_speech": "v",
+                                                "meaning_vi": "Tái cấu trúc mã nguồn",
+                                                "example_en": "We should refactor this module.",
+                                                "example_vi": "Chúng ta nên tái cấu trúc mô-đun này.",
+                                            }
+                                        ]
+                                    }
+                                )
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+        session = MagicMock()
+        session.post.side_effect = [resp_404, resp_ok]
+
+        batch = generate_vocab_with_gemini(
+            topic="it",
+            count=1,
+            api_key="test-key",
+            model="gemini-2.5-flash",
+            session=session,
+        )
+        self.assertTrue(batch.used_ai)
+        self.assertEqual([i.term for i in batch.items], ["refactor"])
+        self.assertEqual(session.post.call_count, 2)
+        self.assertIn("gemini-2.5-flash", session.post.call_args_list[0].args[0])
+        self.assertIn("gemini-3.5-flash-lite", session.post.call_args_list[1].args[0])
+
     def test_fallback_handles_exhausted_topic_bank(self) -> None:
         all_it = [item.term for item in FALLBACK_VOCAB_BANK["it"]]
         batch = build_fallback_batch("it", count=4, exclude_terms=all_it)

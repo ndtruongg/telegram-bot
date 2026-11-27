@@ -15,6 +15,7 @@ DEFAULT_REMINDER_LEAD_DAYS: tuple[int, ...] = (7, 3, 1, 0)
 
 DEFAULT_VOCAB_SEND_TIMES: tuple[tuple[int, int], ...] = ((8, 0), (20, 0))
 DEFAULT_VOCAB_TOPICS: tuple[str, ...] = ("it", "communication", "ielts", "mixed")
+DEFAULT_GEMINI_MODEL: str = "gemini-3.5-flash-lite"
 
 
 def _load_dotenv(env_path: Path) -> None:
@@ -142,7 +143,7 @@ class MorningNewsConfig:
     timezone: str = "Asia/Ho_Chi_Minh"
     check_interval: int = 60
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = DEFAULT_GEMINI_MODEL
 
 
 @dataclass(frozen=True)
@@ -166,7 +167,7 @@ class DailyVocabConfig:
     check_interval: int = 60
     max_history: int = 300
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = DEFAULT_GEMINI_MODEL
     history_json: str = ""
 
 
@@ -226,7 +227,7 @@ class Settings:
         vocab_check_interval = max(60, int(_env("VOCAB_CHECK_INTERVAL", "60")))
         vocab_max_history = max(20, min(1000, int(_env("VOCAB_MAX_HISTORY", "300"))))
         gemini_api_key = os.getenv("GEMINI_API_KEY", "").strip()
-        gemini_model = _env("GEMINI_MODEL", "gemini-2.5-flash")
+        gemini_model = _env("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
 
         return cls(
             telegram_token=token,
