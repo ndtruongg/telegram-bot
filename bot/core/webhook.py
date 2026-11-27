@@ -243,6 +243,7 @@ def process_cron_request(
         ran: list[str] = []
         skipped: list[str] = []
         failed: list[str] = []
+        errors: dict[str, str] = {}
 
         for feature in target_features:
             now_mono = monotonic_provider()
@@ -257,16 +258,20 @@ def process_cron_request(
                 feature.execute()
                 _CRON_LAST_RUN_AT[feature.name] = monotonic_provider()
                 ran.append(feature.name)
-            except Exception:
+            except Exception as exc:
                 logger.exception("Lỗi khi chạy tính năng '%s' qua /api/cron.", feature.name)
                 failed.append(feature.name)
+                errors[feature.name] = f"{type(exc).__name__}: {str(exc)[:300]}"
 
         status_code = 200 if not failed else 500
-        return status_code, {
+        response_payload: dict[str, Any] = {
             "ok": not failed,
             "ran": ran,
             "skipped": skipped,
             "failed": failed,
         }
+        if errors:
+            response_payload["errors"] = errors
+        return status_code, response_payload
     finally:
         _CRON_LOCK.release()

@@ -218,6 +218,67 @@ class TestWeatherClientAndAnalysis(unittest.TestCase):
         self.assertIsNone(report_no_aq.air_quality)
         self.assertAlmostEqual(report_no_aq.current_uv or 0.0, 1.8)
 
+    def test_fetch_weather_report_falls_back_to_met_no_when_open_meteo_rate_limited(self) -> None:
+        rate_limited = MagicMock(status_code=429)
+        rate_limited.json.return_value = {
+            "error": True,
+            "reason": "Minutely API request limit exceeded",
+        }
+        met_resp = MagicMock(status_code=200)
+        met_resp.json.return_value = {
+            "properties": {
+                "timeseries": [
+                    {
+                        "time": "2026-11-27T06:00:00Z",
+                        "data": {
+                            "instant": {
+                                "details": {
+                                    "air_temperature": 24.0,
+                                    "relative_humidity": 65.0,
+                                    "wind_speed": 3.0,
+                                }
+                            },
+                            "next_1_hours": {
+                                "summary": {"symbol_code": "heavyrain"},
+                                "details": {"precipitation_amount": 6.2},
+                            },
+                        },
+                    },
+                    {
+                        "time": "2026-11-27T07:00:00Z",
+                        "data": {
+                            "instant": {
+                                "details": {
+                                    "air_temperature": 25.5,
+                                    "relative_humidity": 70.0,
+                                    "wind_speed": 4.0,
+                                }
+                            },
+                            "next_1_hours": {
+                                "summary": {"symbol_code": "cloudy"},
+                                "details": {"precipitation_amount": 0.0},
+                            },
+                        },
+                    },
+                ]
+            }
+        }
+
+        session = MagicMock()
+        # 2 Open-Meteo forecast attempts (429), 1 Open-Meteo AQ attempt (429), 1 MET Norway fallback (200)
+        session.get.side_effect = [rate_limited, rate_limited, rate_limited, met_resp]
+
+        report = fetch_weather_report("Hà Nội", session=session)
+        self.assertEqual(report.location.name, "Hà Nội")
+        self.assertIn("MET Norway", report.source)
+        self.assertAlmostEqual(report.current_temp or 0.0, 24.0)
+        self.assertEqual(report.current_weather_code, 65)
+        self.assertAlmostEqual(report.current_wind_speed or 0.0, 10.8)
+        self.assertIsNone(report.air_quality)
+        self.assertIsNotNone(report.today)
+        assert report.today is not None
+        self.assertAlmostEqual(report.today.precipitation_sum or 0.0, 6.2)
+
     def test_classification_raincoat_advice_and_alert_detection(self) -> None:
         self.assertEqual(describe_weather_code(95), ("⛈️", "Mưa giông"))
         self.assertEqual(classify_uv(8.5)[1], "Rất cao")
@@ -390,7 +451,7 @@ class TestWeatherFeature(unittest.TestCase):
             feature.execute()
             self.assertEqual(telegram.send_message.call_count, 1)
             alert_text = telegram.send_message.call_args.args[0]
-            self.assertIn("CẢNH BÁO MƯA LỚN & AQI XẤU", alert_text)
+            self.assertIn("CẢNH BÁO MƯA LỚN &amp; AQI XẤU", alert_text)
             self.assertIn("9.5 mm/h", alert_text)
             self.assertIn("178", alert_text)
 

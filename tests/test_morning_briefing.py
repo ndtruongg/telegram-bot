@@ -367,7 +367,7 @@ class TestMorningBriefingFeature(unittest.TestCase):
             weather_now[0] = severe_afternoon
             weather.execute()
             self.assertEqual(telegram.send_message.call_count, 2)
-            self.assertIn("CẢNH BÁO MƯA LỚN & AQI XẤU", telegram.send_message.call_args.args[0])
+            self.assertIn("CẢNH BÁO MƯA LỚN &amp; AQI XẤU", telegram.send_message.call_args.args[0])
 
             # At 15:00: RemindersFeature STILL fires exact-time alert for "Họp chiều" (and NOT 07:00 item)
             now_box[0] = datetime(2026, 11, 27, 15, 0, tzinfo=VN_TZ)

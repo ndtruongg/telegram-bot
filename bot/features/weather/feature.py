@@ -440,7 +440,7 @@ class WeatherFeature(BaseFeature):
         )
 
         return (
-            f"🌤️ <b>TRẠNG THÁI THỜI TIẾT & CHẤT LƯỢNG KHÔNG KHÍ</b>\n\n"
+            f"🌤️ <b>TRẠNG THÁI THỜI TIẾT &amp; CHẤT LƯỢNG KHÔNG KHÍ</b>\n\n"
             f"Trạng thái: <b>{enabled_text}</b>\n"
             f"Thành phố mặc định: <b>{html.escape(active_city)}</b>\n"
             f"Dự báo sáng sớm: <b>{schedule_text}</b>\n"
@@ -450,7 +450,7 @@ class WeatherFeature(BaseFeature):
             f"Ngưỡng AQI xấu: <b>US AQI ≥ {self._config.aqi_alert_threshold}</b>\n"
             f"Giãn cách cảnh báo: <b>{self._config.alert_cooldown_minutes} phút</b>\n"
             f"Dự báo sáng gần nhất: <b>{last_forecast}</b>\n"
-            f"Nguồn dữ liệu: Open-Meteo (miễn phí, không cần API key)\n"
+            f"Nguồn dữ liệu: Open-Meteo (dự phòng MET Norway, miễn phí)\n"
             f"Nguồn đồng bộ: {source}"
         )
 
@@ -470,7 +470,7 @@ class WeatherFeature(BaseFeature):
         if is_morning_digest:
             header = f"🌅 <b>DỰ BÁO THỜI TIẾT SÁNG SỚM — {date_label}</b>"
         else:
-            header = f"{cur_icon} <b>THỜI TIẾT & KHÔNG KHÍ — {loc_label}</b>"
+            header = f"{cur_icon} <b>THỜI TIẾT &amp; KHÔNG KHÍ — {loc_label}</b>"
 
         lines = [header]
         if is_morning_digest:
@@ -588,7 +588,7 @@ class WeatherFeature(BaseFeature):
                 lines.append(cls._format_outlook_line(day))
 
         lines.append("")
-        lines.append("<i>Nguồn: Open-Meteo (miễn phí)</i>")
+        lines.append(f"<i>Nguồn: {html.escape(report.source)} (miễn phí)</i>")
         return cls._truncate_message(lines)
 
     @staticmethod
@@ -611,7 +611,7 @@ class WeatherFeature(BaseFeature):
     ) -> str:
         loc_label = html.escape(report.location.display_name)
         if heavy_rain is not None and bad_aqi is not None:
-            title = f"🚨 <b>CẢNH BÁO MƯA LỚN & AQI XẤU — {loc_label}</b>"
+            title = f"🚨 <b>CẢNH BÁO MƯA LỚN &amp; AQI XẤU — {loc_label}</b>"
         elif heavy_rain is not None:
             title = f"⛈️ <b>CẢNH BÁO SẮP CÓ MƯA LỚN — {loc_label}</b>"
         else:
@@ -655,7 +655,7 @@ class WeatherFeature(BaseFeature):
                 lines.append(f"• 😷 <i>{html.escape(bad_aqi.advice)}</i>")
 
         lines.append("")
-        lines.append("<i>Gõ /weather để xem chi tiết đầy đủ • Nguồn: Open-Meteo</i>")
+        lines.append(f"<i>Gõ /weather để xem chi tiết đầy đủ • Nguồn: {html.escape(report.source)}</i>")
         return cls._truncate_message(lines)
 
     @staticmethod

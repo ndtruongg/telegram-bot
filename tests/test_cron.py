@@ -228,6 +228,7 @@ class TestCronEndpoint(unittest.TestCase):
         self.assertEqual(status, 500)
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["failed"], ["gold_price"])
+        self.assertIn("RuntimeError: boom", payload["errors"]["gold_price"])
         self.assertEqual(payload["ran"], ["reminders"])
 
 

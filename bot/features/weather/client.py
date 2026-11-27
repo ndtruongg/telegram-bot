@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 import unicodedata
 from dataclasses import dataclass
+from datetime import datetime, timezone as dt_timezone
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import requests
 
@@ -15,8 +18,11 @@ logger = logging.getLogger(__name__)
 GEOCODING_API_URL = "https://geocoding-api.open-meteo.com/v1/search"
 FORECAST_API_URL = "https://api.open-meteo.com/v1/forecast"
 AIR_QUALITY_API_URL = "https://air-quality-api.open-meteo.com/v1/air-quality"
+MET_NO_FORECAST_API_URL = "https://api.met.no/weatherapi/locationforecast/2.0/compact"
 
-DEFAULT_TIMEOUT = 15
+DEFAULT_TIMEOUT = 10
+DEFAULT_USER_AGENT = "telegram-bot-weather/1.0 (+https://github.com/ndtruongg/telegram-bot)"
+_RETRYABLE_STATUS_CODES: frozenset[int] = frozenset({429, 500, 502, 503, 504})
 
 # WMO Weather interpretation codes (WW) mapped to (emoji, Vietnamese description)
 WMO_WEATHER_CODES: dict[int, tuple[str, str]] = {
@@ -150,6 +156,7 @@ class WeatherReport:
     next_days: tuple[DailyForecast, ...]
     hourly: tuple[HourlyForecast, ...]
     air_quality: AirQualityData | None
+    source: str = "Open-Meteo"
 
 
 @dataclass(frozen=True)
@@ -549,6 +556,7 @@ def geocode_city(
                     "language": "vi",
                     "format": "json",
                 },
+                headers={"User-Agent": DEFAULT_USER_AGENT},
                 timeout=timeout,
             )
             resp.raise_for_status()
@@ -703,6 +711,252 @@ def _parse_forecast_payload(
     )
 
 
+def _extract_error_reason(resp: requests.Response) -> str:
+    try:
+        body = resp.json()
+        if isinstance(body, dict) and body.get("reason"):
+            return str(body["reason"])
+    except Exception:
+        pass
+    text = getattr(resp, "text", "")
+    if isinstance(text, str) and text.strip():
+        return text.strip()[:160]
+    return f"HTTP {getattr(resp, 'status_code', 'error')}"
+
+
+def _request_json(
+    http: requests.Session,
+    url: str,
+    *,
+    params: dict[str, Any],
+    timeout: int,
+    retries: int = 0,
+    headers: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Perform a GET request returning a JSON object, retrying transient errors."""
+    req_headers = {"User-Agent": DEFAULT_USER_AGENT}
+    if headers:
+        req_headers.update(headers)
+
+    last_exc: Exception | None = None
+    attempts = max(1, retries + 1)
+    for attempt in range(attempts):
+        try:
+            resp = http.get(url, params=params, headers=req_headers, timeout=timeout)
+            status = getattr(resp, "status_code", 200)
+            if isinstance(status, int) and status in _RETRYABLE_STATUS_CODES and attempt + 1 < attempts:
+                logger.warning(
+                    "API %s trả về HTTP %s (lần %d/%d), thử lại...",
+                    url,
+                    status,
+                    attempt + 1,
+                    attempts,
+                )
+                time.sleep(0.5 * (attempt + 1))
+                continue
+            if isinstance(status, int) and status >= 400:
+                reason = _extract_error_reason(resp)
+                raise requests.HTTPError(f"HTTP {status}: {reason}", response=resp)
+            resp.raise_for_status()
+            payload = resp.json()
+            if not isinstance(payload, dict):
+                raise ValueError("Phản hồi JSON không phải đối tượng hợp lệ.")
+            if payload.get("error") is True:
+                raise RuntimeError(str(payload.get("reason") or "API trả về lỗi."))
+            return payload
+        except (requests.RequestException, ValueError, RuntimeError) as exc:
+            last_exc = exc
+            if attempt + 1 < attempts and isinstance(
+                exc, (requests.ConnectionError, requests.Timeout)
+            ):
+                logger.warning(
+                    "Lỗi kết nối %s (%s), thử lại lần %d/%d...",
+                    url,
+                    exc,
+                    attempt + 1,
+                    attempts,
+                )
+                time.sleep(0.5 * (attempt + 1))
+                continue
+            break
+
+    assert last_exc is not None
+    raise last_exc
+
+
+def _met_symbol_to_wmo(symbol_code: str | None) -> int | None:
+    """Convert a MET Norway symbol_code string into an approximate WMO weather code."""
+    if not symbol_code:
+        return None
+    base = symbol_code.split("_", maxsplit=1)[0].lower()
+    if "thunder" in base:
+        return 95
+    if "snow" in base or "sleet" in base:
+        return 73 if "heavy" not in base else 75
+    if "heavyrainshowers" in base:
+        return 82
+    if "lightrainshowers" in base:
+        return 80
+    if "rainshowers" in base:
+        return 81
+    if "heavyrain" in base:
+        return 65
+    if "lightrain" in base:
+        return 61
+    if "rain" in base:
+        return 63
+    if "fog" in base:
+        return 45
+    if base == "clearsky":
+        return 0
+    if base == "fair":
+        return 1
+    if base == "partlycloudy":
+        return 2
+    if base == "cloudy":
+        return 3
+    return None
+
+
+def _estimate_rain_prob_from_met(precip_mm: float | None, wmo_code: int | None) -> int:
+    mm = precip_mm or 0.0
+    if mm >= 5.0 or wmo_code in SEVERE_RAIN_CODES:
+        return 90
+    if mm >= 2.0:
+        return 80
+    if mm >= 0.5:
+        return 65
+    if mm > 0.0 or wmo_code in RAIN_WEATHER_CODES:
+        return 45
+    return 10
+
+
+def _parse_met_no_payload(
+    location: GeoLocation,
+    met_data: dict[str, Any],
+    aq_data: dict[str, Any] | None = None,
+) -> WeatherReport:
+    """Parse MET Norway locationforecast/2.0/compact JSON into a WeatherReport."""
+    tz_name = location.timezone or "Asia/Ho_Chi_Minh"
+    try:
+        local_tz = ZoneInfo(tz_name)
+    except ZoneInfoNotFoundError:
+        tz_name = "Asia/Ho_Chi_Minh"
+        local_tz = ZoneInfo(tz_name)
+
+    timeseries = ((met_data.get("properties") or {}).get("timeseries")) or []
+    if not isinstance(timeseries, list) or not timeseries:
+        raise RuntimeError("Dữ liệu MET Norway trống.")
+
+    hourly_list: list[HourlyForecast] = []
+    daily_buckets: dict[str, list[HourlyForecast]] = {}
+    first_details: dict[str, Any] = {}
+    first_time_iso = ""
+    first_code: int | None = None
+    first_precip: float | None = None
+
+    for idx, entry in enumerate(timeseries[:72]):
+        raw_time = str(entry.get("time") or "")
+        if not raw_time:
+            continue
+        try:
+            utc_dt = datetime.fromisoformat(raw_time.replace("Z", "+00:00"))
+            if utc_dt.tzinfo is None:
+                utc_dt = utc_dt.replace(tzinfo=dt_timezone.utc)
+            local_dt = utc_dt.astimezone(local_tz)
+        except ValueError:
+            continue
+
+        time_iso = local_dt.strftime("%Y-%m-%dT%H:%M")
+        data = entry.get("data") or {}
+        instant = (data.get("instant") or {}).get("details") or {}
+        next_1h = data.get("next_1_hours") or {}
+        next_6h = data.get("next_6_hours") or {}
+
+        symbol = (
+            (next_1h.get("summary") or {}).get("symbol_code")
+            or (next_6h.get("summary") or {}).get("symbol_code")
+        )
+        wmo = _met_symbol_to_wmo(str(symbol) if symbol else None)
+        precip_1h = _safe_float((next_1h.get("details") or {}).get("precipitation_amount"))
+        if precip_1h is None:
+            precip_6h = _safe_float((next_6h.get("details") or {}).get("precipitation_amount"))
+            precip_1h = round(precip_6h / 6.0, 2) if precip_6h is not None else 0.0
+
+        temp = _safe_float(instant.get("air_temperature"))
+        prob = _estimate_rain_prob_from_met(precip_1h, wmo)
+
+        hf = HourlyForecast(
+            time_iso=time_iso,
+            temperature=temp,
+            precipitation_probability=prob,
+            precipitation=precip_1h,
+            rain=precip_1h,
+            weather_code=wmo,
+            uv_index=None,
+        )
+        hourly_list.append(hf)
+        daily_buckets.setdefault(hf.date_iso, []).append(hf)
+
+        if idx == 0:
+            first_details = instant
+            first_time_iso = time_iso
+            first_code = wmo
+            first_precip = precip_1h
+
+    daily_list: list[DailyForecast] = []
+    for d_iso in sorted(daily_buckets.keys())[:3]:
+        items = daily_buckets[d_iso]
+        temps = [h.temperature for h in items if h.temperature is not None]
+        probs = [h.precipitation_probability for h in items if h.precipitation_probability is not None]
+        precip_sum = round(sum((h.precipitation or 0.0) for h in items), 1)
+        codes = [h.weather_code for h in items if h.weather_code is not None]
+        chosen_code = max(
+            codes,
+            key=lambda c: (2 if c in SEVERE_RAIN_CODES else (1 if c in RAIN_WEATHER_CODES else 0), c),
+        ) if codes else None
+        daily_list.append(
+            DailyForecast(
+                date_iso=d_iso,
+                weather_code=chosen_code,
+                temp_max=max(temps) if temps else None,
+                temp_min=min(temps) if temps else None,
+                precipitation_sum=precip_sum,
+                precipitation_prob_max=max(probs) if probs else None,
+                uv_index_max=None,
+            )
+        )
+
+    wind_ms = _safe_float(first_details.get("wind_speed"))
+    wind_kmh = round(wind_ms * 3.6, 1) if wind_ms is not None else None
+
+    today = daily_list[0] if daily_list else None
+    air_quality: AirQualityData | None = None
+    current_uv: float | None = None
+    if isinstance(aq_data, dict):
+        parsed_aq = _parse_forecast_payload(location, {"timezone": tz_name}, aq_data)
+        air_quality = parsed_aq.air_quality
+        current_uv = parsed_aq.current_uv
+
+    return WeatherReport(
+        location=location,
+        current_time_iso=first_time_iso,
+        timezone=tz_name,
+        current_temp=_safe_float(first_details.get("air_temperature")),
+        current_apparent_temp=None,
+        current_humidity=_safe_int(first_details.get("relative_humidity")),
+        current_wind_speed=wind_kmh,
+        current_precipitation=first_precip,
+        current_weather_code=first_code,
+        current_uv=current_uv,
+        today=today,
+        next_days=tuple(daily_list[1:]),
+        hourly=tuple(hourly_list),
+        air_quality=air_quality,
+        source="MET Norway (dự phòng Open-Meteo)",
+    )
+
+
 def fetch_weather_report(
     city: str,
     *,
@@ -712,7 +966,7 @@ def fetch_weather_report(
     session: requests.Session | None = None,
     timeout: int = DEFAULT_TIMEOUT,
 ) -> WeatherReport:
-    """Fetch weather forecast and air quality from Open-Meteo (free, no API key)."""
+    """Fetch weather forecast and air quality from Open-Meteo (with MET Norway fallback)."""
     http = session or requests.Session()
 
     if latitude is not None and longitude is not None:
@@ -749,12 +1003,22 @@ def fetch_weather_report(
         ),
     }
 
+    forecast_data: dict[str, Any] | None = None
+    open_meteo_err: Exception | None = None
     try:
-        forecast_resp = http.get(FORECAST_API_URL, params=forecast_params, timeout=timeout)
-        forecast_resp.raise_for_status()
-        forecast_data = forecast_resp.json()
-    except (requests.RequestException, ValueError) as exc:
-        raise RuntimeError(f"Không thể tải dữ liệu thời tiết Open-Meteo: {exc}") from exc
+        forecast_data = _request_json(
+            http,
+            FORECAST_API_URL,
+            params=forecast_params,
+            timeout=timeout,
+            retries=1,
+        )
+    except Exception as exc:
+        open_meteo_err = exc
+        logger.warning(
+            "Open-Meteo Forecast lỗi (%s), chuyển sang nguồn dự phòng MET Norway...",
+            exc,
+        )
 
     aq_data: dict[str, Any] | None = None
     aq_params = {
@@ -766,12 +1030,34 @@ def fetch_weather_report(
         "hourly": "us_aqi,pm2_5,pm10,uv_index",
     }
     try:
-        aq_resp = http.get(AIR_QUALITY_API_URL, params=aq_params, timeout=timeout)
-        aq_resp.raise_for_status()
-        parsed_aq = aq_resp.json()
-        if isinstance(parsed_aq, dict):
-            aq_data = parsed_aq
-    except (requests.RequestException, ValueError) as exc:
+        aq_data = _request_json(
+            http,
+            AIR_QUALITY_API_URL,
+            params=aq_params,
+            timeout=timeout,
+            retries=0,
+        )
+    except Exception as exc:
         logger.warning("Không thể tải dữ liệu AQI từ Open-Meteo (%s), tiếp tục không có AQI.", exc)
 
-    return _parse_forecast_payload(location, forecast_data, aq_data)
+    if forecast_data is not None:
+        return _parse_forecast_payload(location, forecast_data, aq_data)
+
+    # Fallback to MET Norway (free, no API key, friendly to shared cloud IPs)
+    try:
+        met_data = _request_json(
+            http,
+            MET_NO_FORECAST_API_URL,
+            params={
+                "lat": round(location.latitude, 4),
+                "lon": round(location.longitude, 4),
+            },
+            timeout=timeout,
+            retries=0,
+        )
+        return _parse_met_no_payload(location, met_data, aq_data)
+    except Exception as fallback_exc:
+        raise RuntimeError(
+            f"Không thể tải dữ liệu thời tiết Open-Meteo ({open_meteo_err}) "
+            f"và nguồn dự phòng MET Norway ({fallback_exc})"
+        ) from open_meteo_err
