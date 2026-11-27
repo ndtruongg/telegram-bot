@@ -7,6 +7,7 @@ from bot.core.feature import BaseFeature
 from bot.core.github_vars import GitHubVariablesClient
 from bot.core.state import StateStore
 from bot.core.telegram_client import TelegramClient
+from bot.features.daily_vocab import DailyVocabFeature
 from bot.features.gold_price import GoldPriceFeature
 from bot.features.morning_news import MorningNewsFeature
 from bot.features.reminders import RemindersFeature
@@ -49,6 +50,16 @@ def load_features(
             RemindersFeature(
                 telegram=telegram,
                 config=settings.reminders,
+                state_store=state_store,
+                github_vars=github_vars,
+            )
+        )
+
+    if settings.daily_vocab.enabled or include_disabled:
+        features.append(
+            DailyVocabFeature(
+                telegram=telegram,
+                config=settings.daily_vocab,
                 state_store=state_store,
                 github_vars=github_vars,
             )

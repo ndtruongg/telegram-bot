@@ -13,6 +13,9 @@ DEFAULT_NEWS_RSS_URLS: tuple[str, ...] = (
 
 DEFAULT_REMINDER_LEAD_DAYS: tuple[int, ...] = (7, 3, 1, 0)
 
+DEFAULT_VOCAB_SEND_TIMES: tuple[tuple[int, int], ...] = ((8, 0), (20, 0))
+DEFAULT_VOCAB_TOPICS: tuple[str, ...] = ("it", "communication", "ielts", "mixed")
+
 
 def _load_dotenv(env_path: Path) -> None:
     """Load key=value pairs from a .env file into os.environ (without overwriting existing vars)."""
@@ -62,6 +65,64 @@ def _parse_lead_days(raw: str, default: tuple[int, ...] = DEFAULT_REMINDER_LEAD_
     return tuple(sorted(days, reverse=True))
 
 
+def _parse_send_times(
+    raw: str,
+    default: tuple[tuple[int, int], ...] = DEFAULT_VOCAB_SEND_TIMES,
+) -> tuple[tuple[int, int], ...]:
+    """Parse comma-separated HH:MM (or HHhMM) schedule times into sorted unique (hour, minute) tuples."""
+    text = raw.strip()
+    if not text:
+        return default
+    slots: set[tuple[int, int]] = set()
+    for part in text.split(","):
+        cleaned = part.strip().lower().replace("h", ":")
+        if not cleaned:
+            continue
+        if ":" in cleaned:
+            h_str, _, m_str = cleaned.partition(":")
+            m_str = m_str or "0"
+        else:
+            h_str, m_str = cleaned, "0"
+        try:
+            hour = int(h_str)
+            minute = int(m_str)
+        except ValueError:
+            continue
+        if 0 <= hour <= 23 and 0 <= minute <= 59:
+            slots.add((hour, minute))
+    return tuple(sorted(slots)) if slots else default
+
+
+def _parse_vocab_topic(raw: str, default: str = "mixed") -> str:
+    """Normalize configured vocabulary topic name."""
+    cleaned = raw.strip().lower().replace("-", "_").replace(" ", "_")
+    aliases = {
+        "it": "it",
+        "tech": "it",
+        "dev": "it",
+        "software": "it",
+        "cntt": "it",
+        "communication": "communication",
+        "comm": "communication",
+        "daily": "communication",
+        "speaking": "communication",
+        "giaotiep": "communication",
+        "giao_tiep": "communication",
+        "work": "communication",
+        "ielts": "ielts",
+        "academic": "ielts",
+        "exam": "ielts",
+        "mixed": "mixed",
+        "mix": "mixed",
+        "all": "mixed",
+        "auto": "mixed",
+        "random": "mixed",
+        "tonghop": "mixed",
+        "tong_hop": "mixed",
+    }
+    return aliases.get(cleaned, default)
+
+
 @dataclass(frozen=True)
 class GoldPriceConfig:
     enabled: bool
@@ -96,6 +157,20 @@ class RemindersConfig:
 
 
 @dataclass(frozen=True)
+class DailyVocabConfig:
+    enabled: bool = True
+    topic: str = "mixed"
+    words_per_batch: int = 4
+    send_times: tuple[tuple[int, int], ...] = DEFAULT_VOCAB_SEND_TIMES
+    timezone: str = "Asia/Ho_Chi_Minh"
+    check_interval: int = 60
+    max_history: int = 300
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"
+    history_json: str = ""
+
+
+@dataclass(frozen=True)
 class Settings:
     telegram_token: str
     telegram_chat_id: str
@@ -103,6 +178,7 @@ class Settings:
     gold_price: GoldPriceConfig
     morning_news: MorningNewsConfig = field(default_factory=MorningNewsConfig)
     reminders: RemindersConfig = field(default_factory=RemindersConfig)
+    daily_vocab: DailyVocabConfig = field(default_factory=DailyVocabConfig)
     state_file: str = ".bot_state.json"
     bot_state_json: str = ""
     telegram_webhook_secret: str = ""
@@ -144,6 +220,14 @@ class Settings:
         reminders_check_interval = max(60, int(_env("REMINDERS_CHECK_INTERVAL", "60")))
         reminders_lead_days = _parse_lead_days(_env("REMINDERS_LEAD_DAYS", ""))
 
+        vocab_topic = _parse_vocab_topic(_env("VOCAB_TOPIC", "mixed"))
+        vocab_words_per_batch = max(1, min(10, int(_env("VOCAB_WORDS_PER_BATCH", "4"))))
+        vocab_send_times = _parse_send_times(_env("VOCAB_SEND_TIMES", ""))
+        vocab_check_interval = max(60, int(_env("VOCAB_CHECK_INTERVAL", "60")))
+        vocab_max_history = max(20, min(1000, int(_env("VOCAB_MAX_HISTORY", "300"))))
+        gemini_api_key = os.getenv("GEMINI_API_KEY", "").strip()
+        gemini_model = _env("GEMINI_MODEL", "gemini-2.5-flash")
+
         return cls(
             telegram_token=token,
             telegram_chat_id=chat_id,
@@ -163,8 +247,8 @@ class Settings:
                 send_minute=news_send_minute,
                 timezone=_env("NEWS_TIMEZONE", "Asia/Ho_Chi_Minh"),
                 check_interval=news_check_interval,
-                gemini_api_key=os.getenv("GEMINI_API_KEY", "").strip(),
-                gemini_model=_env("GEMINI_MODEL", "gemini-2.5-flash"),
+                gemini_api_key=gemini_api_key,
+                gemini_model=gemini_model,
             ),
             reminders=RemindersConfig(
                 enabled=_env_bool("REMINDERS_ENABLED", True),
@@ -174,6 +258,18 @@ class Settings:
                 lead_days=reminders_lead_days,
                 check_interval=reminders_check_interval,
                 reminders_json=os.getenv("REMINDERS_DATA", "").strip(),
+            ),
+            daily_vocab=DailyVocabConfig(
+                enabled=_env_bool("VOCAB_ENABLED", True),
+                topic=vocab_topic,
+                words_per_batch=vocab_words_per_batch,
+                send_times=vocab_send_times,
+                timezone=_env("VOCAB_TIMEZONE", "Asia/Ho_Chi_Minh"),
+                check_interval=vocab_check_interval,
+                max_history=vocab_max_history,
+                gemini_api_key=gemini_api_key,
+                gemini_model=gemini_model,
+                history_json=os.getenv("VOCAB_HISTORY", "").strip(),
             ),
             state_file=state_file,
             bot_state_json=os.getenv("BOT_STATE_JSON", "").strip(),

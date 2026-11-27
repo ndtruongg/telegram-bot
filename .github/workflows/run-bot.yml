@@ -67,6 +67,13 @@ jobs:
           REMINDERS_TIMEZONE: ${{ vars.REMINDERS_TIMEZONE }}
           REMINDERS_LEAD_DAYS: ${{ vars.REMINDERS_LEAD_DAYS }}
           REMINDERS_DATA: ${{ vars.REMINDERS_DATA }}
+          VOCAB_ENABLED: ${{ vars.VOCAB_ENABLED }}
+          VOCAB_TOPIC: ${{ vars.VOCAB_TOPIC }}
+          VOCAB_WORDS_PER_BATCH: ${{ vars.VOCAB_WORDS_PER_BATCH }}
+          VOCAB_SEND_TIMES: ${{ vars.VOCAB_SEND_TIMES }}
+          VOCAB_TIMEZONE: ${{ vars.VOCAB_TIMEZONE }}
+          VOCAB_MAX_HISTORY: ${{ vars.VOCAB_MAX_HISTORY }}
+          VOCAB_HISTORY: ${{ vars.VOCAB_HISTORY }}
           BOT_STATE_JSON: ${{ vars.BOT_STATE_JSON }}
           STATE_FILE: .bot_state.json
           INPUT_FEATURE: ${{ inputs.feature }}

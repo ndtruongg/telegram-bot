@@ -37,10 +37,14 @@ Bot Telegram được tổ chức theo kiến trúc module hóa, mỗi tính nă
 │   │   │   ├── rss.py              # Lấy và gộp tin RSS (VnExpress, Tuổi Trẻ)
 │   │   │   ├── summarizer.py       # Tóm tắt tin bằng Gemini AI (kèm dự phòng RSS)
 │   │   │   └── feature.py          # Lập lịch gửi 07:00 sáng & lệnh /news_*
-│   │   └── reminders/              # Tính năng nhắc việc & đếm ngược sự kiện
-│   │       ├── models.py           # Mô hình sự kiện, tính lặp lại & JSON
-│   │       ├── parser.py           # Parse ngày/giờ linh hoạt (DD/MM, +3d, ngaymai...)
-│   │       └── feature.py          # Lập lịch nhắc tự động & lệnh /remind_*, /countdown
+│   │   ├── reminders/              # Tính năng nhắc việc & đếm ngược sự kiện
+│   │   │   ├── models.py           # Mô hình sự kiện, tính lặp lại & JSON
+│   │   │   ├── parser.py           # Parse ngày/giờ linh hoạt (DD/MM, +3d, ngaymai...)
+│   │   │   └── feature.py          # Lập lịch nhắc tự động & lệnh /remind_*, /countdown
+│   │   └── daily_vocab/            # Tính năng từ vựng tiếng Anh mỗi ngày (sáng/tối)
+│   │       ├── models.py           # Chủ đề (IT/Giao tiếp/IELTS) & lưu lịch sử chống trùng
+│   │       ├── generator.py        # Tạo từ vựng + ví dụ bằng Gemini AI (kèm kho dự phòng)
+│   │       └── feature.py          # Lập lịch sáng/tối & lệnh /vocab_*
 │   └── utils/                      # Hàm tiện ích dùng chung
 │       └── parsers.py              # Parse & format giá tiền
 └── tests/
@@ -109,6 +113,12 @@ Repo đã có sẵn workflow [.github/workflows/run-bot.yml](.github/workflows/r
    - `REMINDERS_SEND_HOUR` / `REMINDERS_SEND_MINUTE` (mặc định `7` / `0` theo `Asia/Ho_Chi_Minh`)
    - `REMINDERS_LEAD_DAYS` (mặc định `7,3,1,0` — nhắc trước 7, 3, 1 ngày và đúng ngày)
    - `REMINDERS_DATA` *(tự động tạo/cập nhật khi bạn thêm/xoá bằng lệnh `/remind_add`, `/remind_del`)*
+   - `VOCAB_ENABLED` (mặc định `true`)
+   - `VOCAB_TOPIC` (mặc định `mixed` — hỗ trợ `it`, `communication`, `ielts`, `mixed`)
+   - `VOCAB_WORDS_PER_BATCH` (mặc định `4` — khuyến nghị `3`–`5` từ/buổi)
+   - `VOCAB_SEND_TIMES` (mặc định `08:00,20:00` theo `Asia/Ho_Chi_Minh`)
+   - `VOCAB_MAX_HISTORY` (mặc định `300` từ lưu lịch sử chống trùng lặp)
+   - `VOCAB_HISTORY` *(tự động tạo/cập nhật qua GitHub Variable khi dùng webhook/cron)*
    - `LOG_LEVEL` (mặc định `INFO`)
 4. Vào tab **Actions → Run Telegram Bot Hourly → Run workflow** để chạy thử ngay.
 
@@ -126,6 +136,11 @@ Bot hỗ trợ các lệnh phản hồi tức thì qua Webhook (Telegram chỉ c
 - `/countdown`: Xem nhanh đếm ngược các sự kiện sắp tới.
 - `/remind_del <ID | expired>`: Xoá nhắc việc theo ID (hoặc `expired` để dọn toàn bộ mục đã qua hạn).
 - `/remind_status`: Xem trạng thái tính năng nhắc việc & nguồn đồng bộ.
+- `/vocab_now [it|communication|ielts|mixed] [số từ]`: Nhận ngay 3–5 từ vựng/cụm từ tiếng Anh mới kèm phiên âm, nghĩa và ví dụ từ Gemini AI (tự lưu lịch sử chống trùng).
+- `/vocab_topic [it|communication|ielts|mixed]`: Xem hoặc đổi chủ đề từ vựng mặc định.
+- `/vocab_history [số lượng]`: Xem lại các từ vựng đã học gần đây để ôn tập nhanh.
+- `/vocab_reset`: Xoá lịch sử từ vựng đã học để học lại từ đầu.
+- `/vocab_status`: Xem khung giờ gửi sáng/tối, chủ đề, trạng thái AI và số từ trong lịch sử.
 
 ### Cách triển khai Webhook (khuyến nghị Vercel — miễn phí)
 

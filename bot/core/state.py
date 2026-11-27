@@ -42,7 +42,7 @@ def _merge_state_dicts(
                 combined.update(value)
                 target[key] = combined
             elif (
-                key == "last_sent_date"
+                key in {"last_sent_date", "last_sent_slot"}
                 and isinstance(existing, str)
                 and isinstance(value, str)
             ):
