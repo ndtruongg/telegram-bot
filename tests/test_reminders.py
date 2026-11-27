@@ -257,6 +257,42 @@ class TestRemindersFeature(unittest.TestCase):
         self.assertIn("ĐẾN GIỜ NHẮC VIỆC", msg)
         self.assertNotIn("SỰ KIỆN SẮP TỚI", msg)
 
+    def test_reused_id_after_delete_still_fires_on_same_day(self) -> None:
+        tz = ZoneInfo("Asia/Ho_Chi_Minh")
+        telegram = MagicMock()
+        telegram.send_message.return_value = True
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_path = Path(tmpdir) / ".bot_state.json"
+
+            # First reminder #2 at 07:30 fires at 07:30
+            first_item = ReminderItem(
+                id=2, title="Test 7h30", event_date=date(2026, 11, 27), event_time="07:30", tag="aaa111"
+            )
+            RemindersFeature(
+                telegram=telegram,
+                config=self._make_config(reminders_json=serialize_reminders([first_item])),
+                state_store=StateStore(state_path),
+                now_provider=lambda _tz: datetime(2026, 11, 27, 7, 30, tzinfo=tz),
+            ).execute()
+            self.assertEqual(telegram.send_message.call_count, 1)
+
+            # User deletes #2 and adds a new #2 at 08:30 on the same day -> must still fire at 08:30
+            second_item = ReminderItem(
+                id=2, title="Chấm công đi", event_date=date(2026, 11, 27), event_time="08:30", tag="bbb222"
+            )
+            RemindersFeature(
+                telegram=telegram,
+                config=self._make_config(reminders_json=serialize_reminders([second_item])),
+                state_store=StateStore(state_path),
+                now_provider=lambda _tz: datetime(2026, 11, 27, 8, 30, tzinfo=tz),
+            ).execute()
+            self.assertEqual(telegram.send_message.call_count, 2)
+            msg = telegram.send_message.call_args.args[0]
+            self.assertIn("ĐẾN GIỜ NHẮC VIỆC", msg)
+            self.assertIn("Chấm công đi", msg)
+            self.assertNotIn("SỰ KIỆN SẮP TỚI", msg)
+
     def test_commands_add_list_countdown_delete_status_with_github_vars(self) -> None:
         tz = ZoneInfo("Asia/Ho_Chi_Minh")
         telegram = MagicMock()

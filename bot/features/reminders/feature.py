@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import html
 import logging
+import secrets
 from datetime import date, datetime, timedelta
 from typing import Callable
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -195,11 +196,12 @@ class RemindersFeature(BaseFeature):
                 continue
 
             parsed_time = item.parsed_time()
+            token = item.notification_token()
 
             # 1. Exact time alert on the event day (for timed reminders)
             if days_left == 0 and parsed_time is not None:
                 if (now.hour, now.minute) >= parsed_time:
-                    at_time_key = f"{item.id}:{occ_date.isoformat()}:at_time"
+                    at_time_key = f"{item.id}:{occ_date.isoformat()}:{token}:at_time"
                     if at_time_key not in self._sent_notifications:
                         due_timed.append((item, occ_date, at_time_key))
 
@@ -207,15 +209,19 @@ class RemindersFeature(BaseFeature):
             if send_morning_now:
                 lead_days = item.effective_lead_days(self._config.lead_days)
                 if days_left in lead_days:
-                    # Avoid sending both a morning d0 alert and an at_time alert at the same morning tick
+                    # Skip d0 morning heads-up if the timed event is already at/past due time
+                    # or scheduled at/before the morning digest hour (handled by at_time alert)
                     if (
                         days_left == 0
                         and parsed_time is not None
-                        and parsed_time <= (self._config.send_hour, self._config.send_minute)
+                        and (
+                            parsed_time <= (self._config.send_hour, self._config.send_minute)
+                            or (now.hour, now.minute) >= parsed_time
+                        )
                     ):
                         continue
 
-                    day_key = f"{item.id}:{occ_date.isoformat()}:d{days_left}"
+                    day_key = f"{item.id}:{occ_date.isoformat()}:{token}:d{days_left}"
                     if day_key not in self._sent_notifications:
                         upcoming_alerts.append((days_left, item, occ_date, day_key))
 
@@ -258,6 +264,7 @@ class RemindersFeature(BaseFeature):
             event_date=parsed.event_date,
             event_time=parsed.event_time,
             repeat=parsed.repeat,
+            tag=secrets.token_hex(3),
         )
         items.append(new_item)
 
@@ -448,6 +455,7 @@ class RemindersFeature(BaseFeature):
         return (
             f"🗓️ <b>TRẠNG THÁI NHẮC VIỆC & ĐẾM NGƯỢC</b>\n\n"
             f"Trạng thái: <b>{enabled_text}</b>\n"
+            f"Giờ hiện tại của bot: <b>{now.strftime('%H:%M %d/%m/%Y')}</b>\n"
             f"Giờ nhắc buổi sáng: <b>{schedule_text}</b>\n"
             f"Mốc nhắc trước: <b>{lead_text}</b>\n"
             f"Tổng số mục: <b>{len(items)}</b> "

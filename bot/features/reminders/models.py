@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import calendar
+import hashlib
 import json
 import logging
 from dataclasses import dataclass
@@ -66,6 +67,12 @@ class ReminderItem:
     event_date: date
     event_time: str | None = None  # "HH:MM" or None
     repeat: str = "none"
+    tag: str = ""
+
+    def notification_token(self) -> str:
+        """Short unique fingerprint so reusing a deleted ID never collides in dedupe state."""
+        raw = f"{self.tag}|{self.event_time or ''}|{self.title}".encode("utf-8")
+        return hashlib.sha1(raw).hexdigest()[:8]
 
     def next_occurrence(self, today: date) -> date:
         """Compute the active/next occurrence date on or after ``today``.
@@ -147,6 +154,8 @@ class ReminderItem:
             data["time"] = self.event_time
         if self.repeat and self.repeat != "none":
             data["repeat"] = self.repeat
+        if self.tag:
+            data["tag"] = self.tag
         return data
 
     @classmethod
@@ -176,6 +185,7 @@ class ReminderItem:
 
         raw_repeat = str(raw.get("repeat", "none")).strip().lower()
         repeat = raw_repeat if raw_repeat in VALID_REPEATS else "none"
+        tag = str(raw.get("tag", "")).strip()[:16]
 
         return cls(
             id=item_id,
@@ -183,6 +193,7 @@ class ReminderItem:
             event_date=event_date,
             event_time=event_time,
             repeat=repeat,
+            tag=tag,
         )
 
 
