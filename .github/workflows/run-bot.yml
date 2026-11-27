@@ -2,6 +2,8 @@ name: Run Telegram Bot Hourly
 
 on:
   schedule:
+    # Chạy lúc 06:32 sáng giờ Việt Nam (23:32 UTC) cho dự báo thời tiết sáng sớm
+    - cron: "32 23 * * *"
     # Chạy lúc 07:03 sáng giờ Việt Nam (00:03 UTC) để tránh tắc nghẽn đầu giờ 00:00 UTC
     - cron: "3 0 * * *"
     # Chạy mỗi tiếng 1 lần (dùng phút 17 để tránh delay vào đầu giờ :00)
@@ -80,6 +82,22 @@ jobs:
           LUNAR_TIMEZONE: ${{ vars.LUNAR_TIMEZONE }}
           LUNAR_LEAD_DAYS: ${{ vars.LUNAR_LEAD_DAYS }}
           LUNAR_MOON_LEAD_DAYS: ${{ vars.LUNAR_MOON_LEAD_DAYS }}
+          WEATHER_ENABLED: ${{ vars.WEATHER_ENABLED }}
+          WEATHER_CITY: ${{ vars.WEATHER_CITY }}
+          WEATHER_LATITUDE: ${{ vars.WEATHER_LATITUDE }}
+          WEATHER_LONGITUDE: ${{ vars.WEATHER_LONGITUDE }}
+          WEATHER_SEND_HOUR: ${{ vars.WEATHER_SEND_HOUR }}
+          WEATHER_SEND_MINUTE: ${{ vars.WEATHER_SEND_MINUTE }}
+          WEATHER_TIMEZONE: ${{ vars.WEATHER_TIMEZONE }}
+          WEATHER_ALERTS_ENABLED: ${{ vars.WEATHER_ALERTS_ENABLED }}
+          WEATHER_ALERT_CHECK_INTERVAL: ${{ vars.WEATHER_ALERT_CHECK_INTERVAL }}
+          WEATHER_ALERT_COOLDOWN_MINUTES: ${{ vars.WEATHER_ALERT_COOLDOWN_MINUTES }}
+          WEATHER_ALERT_START_HOUR: ${{ vars.WEATHER_ALERT_START_HOUR }}
+          WEATHER_ALERT_END_HOUR: ${{ vars.WEATHER_ALERT_END_HOUR }}
+          WEATHER_RAIN_LOOKAHEAD_HOURS: ${{ vars.WEATHER_RAIN_LOOKAHEAD_HOURS }}
+          WEATHER_RAIN_ALERT_MM: ${{ vars.WEATHER_RAIN_ALERT_MM }}
+          WEATHER_RAIN_ALERT_PROB: ${{ vars.WEATHER_RAIN_ALERT_PROB }}
+          WEATHER_AQI_THRESHOLD: ${{ vars.WEATHER_AQI_THRESHOLD }}
           BOT_STATE_JSON: ${{ vars.BOT_STATE_JSON }}
           STATE_FILE: .bot_state.json
           INPUT_FEATURE: ${{ inputs.feature }}

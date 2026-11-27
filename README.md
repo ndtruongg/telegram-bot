@@ -45,10 +45,13 @@ Bot Telegram được tổ chức theo kiến trúc module hóa, mỗi tính nă
 │   │   │   ├── models.py           # Chủ đề (IT/Giao tiếp/IELTS) & lưu lịch sử chống trùng
 │   │   │   ├── generator.py        # Tạo từ vựng + ví dụ bằng Gemini AI (kèm kho dự phòng)
 │   │   │   └── feature.py          # Lập lịch sáng/tối & lệnh /vocab_*
-│   │   └── lunar_calendar/         # Tính năng lịch âm, ngày tốt & nhắc Rằm/Mùng 1/ngày lễ VN
-│   │       ├── calendar.py         # Thuật toán lịch âm Việt Nam (UTC+7), Can Chi, Hoàng Đạo
-│   │       ├── events.py           # Danh sách ngày lễ VN (âm/dương), Rằm, Mùng 1 & ngày tốt
-│   │       └── feature.py          # Tự động nhắc hằng ngày & lệnh /lunar, /lunar_*
+│   │   ├── lunar_calendar/         # Tính năng lịch âm, ngày tốt & nhắc Rằm/Mùng 1/ngày lễ VN
+│   │   │   ├── calendar.py         # Thuật toán lịch âm Việt Nam (UTC+7), Can Chi, Hoàng Đạo
+│   │   │   ├── events.py           # Danh sách ngày lễ VN (âm/dương), Rằm, Mùng 1 & ngày tốt
+│   │   │   └── feature.py          # Tự động nhắc hằng ngày & lệnh /lunar, /lunar_*
+│   │   └── weather/                # Tính năng thời tiết & chất lượng không khí (Open-Meteo)
+│   │       ├── client.py           # Gọi Open-Meteo Forecast/AQI/Geocoding & phân tích mưa/UV/AQI
+│   │       └── feature.py          # Dự báo sáng sớm, cảnh báo mưa lớn/AQI xấu & lệnh /weather*
 │   └── utils/                      # Hàm tiện ích dùng chung
 │       └── parsers.py              # Parse & format giá tiền
 └── tests/
@@ -127,6 +130,12 @@ Repo đã có sẵn workflow [.github/workflows/run-bot.yml](.github/workflows/r
    - `LUNAR_SEND_HOUR` / `LUNAR_SEND_MINUTE` (mặc định `7` / `0` theo `Asia/Ho_Chi_Minh`)
    - `LUNAR_LEAD_DAYS` (mặc định `3,1,0` — nhắc trước 3, 1 ngày và đúng ngày lễ Việt Nam)
    - `LUNAR_MOON_LEAD_DAYS` (mặc định `1,0` — nhắc trước 1 ngày và đúng ngày Rằm, Mùng 1)
+   - `WEATHER_ENABLED` (mặc định `true` — dùng Open-Meteo miễn phí, không cần API key)
+   - `WEATHER_CITY` (mặc định `Ho Chi Minh City` — có thể đổi nhanh bằng lệnh `/weather_city`)
+   - `WEATHER_SEND_HOUR` / `WEATHER_SEND_MINUTE` (mặc định `6` / `30` theo `Asia/Ho_Chi_Minh`)
+   - `WEATHER_ALERTS_ENABLED` (mặc định `true` — cảnh báo tự động mưa lớn & AQI xấu)
+   - `WEATHER_RAIN_ALERT_MM` / `WEATHER_RAIN_ALERT_PROB` (mặc định `5.0` mm/h / `75`% trong `3` giờ tới)
+   - `WEATHER_AQI_THRESHOLD` (mặc định `151` theo chuẩn US AQI)
    - `LOG_LEVEL` (mặc định `INFO`)
 4. Vào tab **Actions → Run Telegram Bot Hourly → Run workflow** để chạy thử ngay.
 
@@ -153,6 +162,9 @@ Bot hỗ trợ các lệnh phản hồi tức thì qua Webhook (Telegram chỉ c
 - `/lunar_upcoming [số ngày]`: Xem danh sách ngày Rằm, Mùng 1 âm lịch và ngày lễ Việt Nam sắp tới (mặc định 45 ngày).
 - `/lunar_good [số ngày]`: Xem các ngày Hoàng Đạo (ngày tốt) sắp tới kèm sao, Trực và giờ tốt (mặc định 14 ngày).
 - `/lunar_status`: Xem trạng thái & cấu hình nhắc lịch âm / ngày lễ.
+- `/weather [thành phố]`: Xem dự báo thời tiết, nhiệt độ, xác suất mưa, UV, AQI (PM2.5/PM10) và tư vấn có cần mang áo mưa không (mặc định theo `WEATHER_CITY` hoặc thành phố bất kỳ như `/weather Hà Nội`, `/weather Đà Nẵng`, `/weather Tokyo`).
+- `/weather_city [thành phố]`: Xem hoặc đổi thành phố mặc định (đồng bộ GitHub Variable `WEATHER_CITY`).
+- `/weather_status`: Xem lịch gửi dự báo sáng sớm và các ngưỡng cảnh báo mưa lớn / AQI xấu.
 
 ### Cách triển khai Webhook (khuyến nghị Vercel — miễn phí)
 

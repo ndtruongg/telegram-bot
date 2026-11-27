@@ -48,6 +48,16 @@ def _env_bool(key: str, default: bool) -> bool:
     return raw in {"1", "true", "yes", "on"}
 
 
+def _env_optional_float(key: str) -> float | None:
+    raw = os.getenv(key, "").strip()
+    if not raw:
+        return None
+    try:
+        return float(raw)
+    except ValueError:
+        return None
+
+
 def _parse_lead_days(raw: str, default: tuple[int, ...] = DEFAULT_REMINDER_LEAD_DAYS) -> tuple[int, ...]:
     text = raw.strip()
     if not text:
@@ -186,6 +196,27 @@ class LunarCalendarConfig:
 
 
 @dataclass(frozen=True)
+class WeatherConfig:
+    enabled: bool = True
+    city: str = "Ho Chi Minh City"
+    latitude: float | None = None
+    longitude: float | None = None
+    send_hour: int = 6
+    send_minute: int = 30
+    timezone: str = "Asia/Ho_Chi_Minh"
+    check_interval: int = 60
+    alerts_enabled: bool = True
+    alert_check_interval: int = 1800
+    alert_cooldown_minutes: int = 180
+    alert_start_hour: int = 6
+    alert_end_hour: int = 22
+    rain_lookahead_hours: int = 3
+    rain_alert_mm: float = 5.0
+    rain_alert_prob: int = 75
+    aqi_alert_threshold: int = 151
+
+
+@dataclass(frozen=True)
 class Settings:
     telegram_token: str
     telegram_chat_id: str
@@ -195,6 +226,7 @@ class Settings:
     reminders: RemindersConfig = field(default_factory=RemindersConfig)
     daily_vocab: DailyVocabConfig = field(default_factory=DailyVocabConfig)
     lunar_calendar: LunarCalendarConfig = field(default_factory=LunarCalendarConfig)
+    weather: WeatherConfig = field(default_factory=WeatherConfig)
     state_file: str = ".bot_state.json"
     bot_state_json: str = ""
     telegram_webhook_secret: str = ""
@@ -252,6 +284,20 @@ class Settings:
             _env("LUNAR_MOON_LEAD_DAYS", ""),
             default=DEFAULT_LUNAR_MOON_LEAD_DAYS,
         )
+        weather_city = _env("WEATHER_CITY", "Ho Chi Minh City")
+        weather_lat = _env_optional_float("WEATHER_LATITUDE")
+        weather_lon = _env_optional_float("WEATHER_LONGITUDE")
+        weather_send_hour = max(0, min(23, int(_env("WEATHER_SEND_HOUR", "6"))))
+        weather_send_minute = max(0, min(59, int(_env("WEATHER_SEND_MINUTE", "30"))))
+        weather_check_interval = max(60, int(_env("WEATHER_CHECK_INTERVAL", "60")))
+        weather_alert_check_interval = max(300, int(_env("WEATHER_ALERT_CHECK_INTERVAL", "1800")))
+        weather_alert_cooldown = max(15, int(_env("WEATHER_ALERT_COOLDOWN_MINUTES", "180")))
+        weather_alert_start_hour = max(0, min(23, int(_env("WEATHER_ALERT_START_HOUR", "6"))))
+        weather_alert_end_hour = max(0, min(23, int(_env("WEATHER_ALERT_END_HOUR", "22"))))
+        weather_rain_lookahead = max(1, min(12, int(_env("WEATHER_RAIN_LOOKAHEAD_HOURS", "3"))))
+        weather_rain_alert_mm = max(0.5, float(_env("WEATHER_RAIN_ALERT_MM", "5.0")))
+        weather_rain_alert_prob = max(10, min(100, int(_env("WEATHER_RAIN_ALERT_PROB", "75"))))
+        weather_aqi_threshold = max(50, min(500, int(_env("WEATHER_AQI_THRESHOLD", "151"))))
         gemini_api_key = os.getenv("GEMINI_API_KEY", "").strip()
         gemini_model = _env("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
 
@@ -306,6 +352,25 @@ class Settings:
                 lead_days=lunar_lead_days,
                 moon_lead_days=lunar_moon_lead_days,
                 check_interval=lunar_check_interval,
+            ),
+            weather=WeatherConfig(
+                enabled=_env_bool("WEATHER_ENABLED", True),
+                city=weather_city,
+                latitude=weather_lat,
+                longitude=weather_lon,
+                send_hour=weather_send_hour,
+                send_minute=weather_send_minute,
+                timezone=_env("WEATHER_TIMEZONE", "Asia/Ho_Chi_Minh"),
+                check_interval=weather_check_interval,
+                alerts_enabled=_env_bool("WEATHER_ALERTS_ENABLED", True),
+                alert_check_interval=weather_alert_check_interval,
+                alert_cooldown_minutes=weather_alert_cooldown,
+                alert_start_hour=weather_alert_start_hour,
+                alert_end_hour=weather_alert_end_hour,
+                rain_lookahead_hours=weather_rain_lookahead,
+                rain_alert_mm=weather_rain_alert_mm,
+                rain_alert_prob=weather_rain_alert_prob,
+                aqi_alert_threshold=weather_aqi_threshold,
             ),
             state_file=state_file,
             bot_state_json=os.getenv("BOT_STATE_JSON", "").strip(),

@@ -12,6 +12,7 @@ from bot.features.gold_price import GoldPriceFeature
 from bot.features.lunar_calendar import LunarCalendarFeature
 from bot.features.morning_news import MorningNewsFeature
 from bot.features.reminders import RemindersFeature
+from bot.features.weather import WeatherFeature
 
 
 def load_features(
@@ -72,6 +73,16 @@ def load_features(
                 telegram=telegram,
                 config=settings.lunar_calendar,
                 state_store=state_store,
+            )
+        )
+
+    if settings.weather.enabled or include_disabled:
+        features.append(
+            WeatherFeature(
+                telegram=telegram,
+                config=settings.weather,
+                state_store=state_store,
+                github_vars=github_vars,
             )
         )
 
