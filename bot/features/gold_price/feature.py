@@ -93,7 +93,7 @@ class GoldPriceFeature(BaseFeature):
         )
 
     def execute(self) -> None:
-        target_price = self.get_target_price()
+        target_price = self.get_target_price(refresh_from_github=True)
 
         # Nếu mục tiêu vừa thay đổi (VD qua /gold_set trên webhook), reset trạng thái chống spam
         if self._state_store is not None:

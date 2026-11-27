@@ -150,6 +150,19 @@ Bot hỗ trợ các lệnh phản hồi tức thì qua Webhook (Telegram chỉ c
    ```
    *(Nếu chỉ muốn cập nhật lại menu lệnh `/` sau khi thêm tính năng mới: `.venv/bin/python main.py --sync-commands`.)*
 
+### Chạy nhắc việc đúng giờ & giữ Render không ngủ (khuyên dùng với Render)
+
+Do gói miễn phí của Render sẽ tự ngủ sau 15 phút không có truy cập và `schedule` của GitHub Actions có thể bị trễ/bỏ lượt, server đã có sẵn endpoint **`/api/cron`** (hỗ trợ cả `GET` và `POST`, bảo vệ bằng `CRON_SECRET` hoặc `TELEGRAM_WEBHOOK_SECRET`, đồng bộ trạng thái chống gửi trùng qua GitHub Variable `BOT_STATE_JSON`).
+
+Chỉ cần tạo **1 cron job miễn phí** trên [cron-job.org](https://cron-job.org):
+- **URL:** `https://<ten-app>.onrender.com/api/cron?secret=<TELEGRAM_WEBHOOK_SECRET>` *(hoặc truyền qua header `X-Cron-Secret`)*
+- **Lịch chạy:** Mỗi **5 phút** (hoặc **1 phút** nếu muốn nhắc việc chính xác từng phút).
+- Khi gọi `/api/cron`, bot tự động:
+  - Giữ Render luôn tỉnh 24/7 (không bao giờ ngủ vì được gọi dưới 15 phút/lần).
+  - Kiểm tra `reminders` & `morning_news` đúng giờ (`07:00`, `07:30`...).
+  - Tự tiết chế `gold_price` chỉ cào giá 1 lần mỗi tiếng theo `GOLD_CHECK_INTERVAL` (có thể ép chạy ngay bằng `?feature=gold_price` hoặc `?force=1`).
+- *(Nhớ thêm `GEMINI_API_KEY` vào Environment Variables của Render để bản tin sáng dùng Gemini AI.)*
+
 ## Cách thêm tính năng mới
 
 Ví dụ muốn thêm tính năng theo dõi thời tiết (`weather`):

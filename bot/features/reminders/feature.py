@@ -135,7 +135,7 @@ class RemindersFeature(BaseFeature):
             )
 
         self._items = list(items)
-        if self._state_store is not None:
+        if self._state_store is not None and self._github_vars is None:
             self._state_store.set(self.name, self._STATE_KEY_LOCAL_ITEMS, serialized)
         return True, sync_note
 

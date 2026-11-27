@@ -2,8 +2,8 @@ name: Run Telegram Bot Hourly
 
 on:
   schedule:
-    # Chạy lúc 07:00 sáng giờ Việt Nam (00:00 UTC) để gửi bản tin sáng đúng giờ
-    - cron: "0 0 * * *"
+    # Chạy lúc 07:03 sáng giờ Việt Nam (00:03 UTC) để tránh tắc nghẽn đầu giờ 00:00 UTC
+    - cron: "3 0 * * *"
     # Chạy mỗi tiếng 1 lần (dùng phút 17 để tránh delay vào đầu giờ :00)
     - cron: "17 * * * *"
   workflow_dispatch:
@@ -67,6 +67,7 @@ jobs:
           REMINDERS_TIMEZONE: ${{ vars.REMINDERS_TIMEZONE }}
           REMINDERS_LEAD_DAYS: ${{ vars.REMINDERS_LEAD_DAYS }}
           REMINDERS_DATA: ${{ vars.REMINDERS_DATA }}
+          BOT_STATE_JSON: ${{ vars.BOT_STATE_JSON }}
           STATE_FILE: .bot_state.json
           INPUT_FEATURE: ${{ inputs.feature }}
         run: |

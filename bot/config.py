@@ -79,7 +79,7 @@ class MorningNewsConfig:
     send_hour: int = 7
     send_minute: int = 0
     timezone: str = "Asia/Ho_Chi_Minh"
-    check_interval: int = 900
+    check_interval: int = 60
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"
 
@@ -91,7 +91,7 @@ class RemindersConfig:
     send_minute: int = 0
     timezone: str = "Asia/Ho_Chi_Minh"
     lead_days: tuple[int, ...] = DEFAULT_REMINDER_LEAD_DAYS
-    check_interval: int = 900
+    check_interval: int = 60
     reminders_json: str = ""
 
 
@@ -104,7 +104,9 @@ class Settings:
     morning_news: MorningNewsConfig = field(default_factory=MorningNewsConfig)
     reminders: RemindersConfig = field(default_factory=RemindersConfig)
     state_file: str = ".bot_state.json"
+    bot_state_json: str = ""
     telegram_webhook_secret: str = ""
+    cron_secret: str = ""
     github_token: str = ""
     github_repository: str = ""
 
@@ -135,11 +137,11 @@ class Settings:
         news_send_minute = max(0, min(59, int(_env("NEWS_SEND_MINUTE", "0"))))
         news_max_articles = max(1, int(_env("NEWS_MAX_ARTICLES", "20")))
         news_max_highlights = max(1, int(_env("NEWS_MAX_HIGHLIGHTS", "12")))
-        news_check_interval = max(60, int(_env("NEWS_CHECK_INTERVAL", "900")))
+        news_check_interval = max(60, int(_env("NEWS_CHECK_INTERVAL", "60")))
 
         reminders_send_hour = max(0, min(23, int(_env("REMINDERS_SEND_HOUR", "7"))))
         reminders_send_minute = max(0, min(59, int(_env("REMINDERS_SEND_MINUTE", "0"))))
-        reminders_check_interval = max(60, int(_env("REMINDERS_CHECK_INTERVAL", "900")))
+        reminders_check_interval = max(60, int(_env("REMINDERS_CHECK_INTERVAL", "60")))
         reminders_lead_days = _parse_lead_days(_env("REMINDERS_LEAD_DAYS", ""))
 
         return cls(
@@ -174,7 +176,9 @@ class Settings:
                 reminders_json=os.getenv("REMINDERS_DATA", "").strip(),
             ),
             state_file=state_file,
+            bot_state_json=os.getenv("BOT_STATE_JSON", "").strip(),
             telegram_webhook_secret=os.getenv("TELEGRAM_WEBHOOK_SECRET", "").strip(),
+            cron_secret=os.getenv("CRON_SECRET", "").strip(),
             github_token=os.getenv("GITHUB_TOKEN", "").strip(),
             github_repository=os.getenv("GITHUB_REPOSITORY", "").strip(),
         )

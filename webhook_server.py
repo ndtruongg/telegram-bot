@@ -1,35 +1,50 @@
-"""Standalone HTTP webhook server for Render, Docker, or local testing."""
+"""Standalone HTTP webhook & cron server for Render, Docker, or local testing."""
 
 from __future__ import annotations
 
 import json
 import logging
 import os
+import re
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlsplit
 
 from bot.config import Settings
 from bot.core.logger import setup_logging
-from bot.core.webhook import process_webhook_request
+from bot.core.webhook import process_cron_request, process_webhook_request
 
 logger = logging.getLogger(__name__)
 
 WEBHOOK_PATHS = {"/", "/webhook", "/api/webhook"}
 HEALTH_PATHS = {"/", "/health", "/api/webhook"}
+CRON_PATHS = {"/cron", "/api/cron"}
+_SECRET_QUERY_RE = re.compile(r"([?&]secret=)[^&\s]+", re.IGNORECASE)
 
 
 class WebhookHTTPHandler(BaseHTTPRequestHandler):
-    """Serves health checks and Telegram webhook POST requests."""
+    """Serves health checks, Telegram webhook POST requests, and HTTP cron triggers."""
+
+    def log_message(self, format: str, *args: object) -> None:
+        message = format % args
+        sanitized = _SECRET_QUERY_RE.sub(r"\1***", message)
+        logger.info("%s - %s", self.address_string(), sanitized)
 
     def do_GET(self) -> None:
-        path = self.path.split("?", maxsplit=1)[0]
-        if path in HEALTH_PATHS:
+        parsed = urlsplit(self.path)
+        if parsed.path in CRON_PATHS:
+            self._handle_cron(parsed.query)
+        elif parsed.path in HEALTH_PATHS:
             self._send_json(200, {"ok": True, "service": "telegram-bot-webhook"})
         else:
             self._send_json(404, {"ok": False, "error": "Not Found"})
 
     def do_POST(self) -> None:
-        path = self.path.split("?", maxsplit=1)[0]
-        if path not in WEBHOOK_PATHS:
+        parsed = urlsplit(self.path)
+        if parsed.path in CRON_PATHS:
+            self._handle_cron(parsed.query)
+            return
+
+        if parsed.path not in WEBHOOK_PATHS:
             self._send_json(404, {"ok": False, "error": "Not Found"})
             return
 
@@ -39,6 +54,14 @@ class WebhookHTTPHandler(BaseHTTPRequestHandler):
             status_code, payload = process_webhook_request(body, self.headers)
         except Exception:
             logger.exception("Lỗi không mong muốn khi xử lý webhook.")
+            status_code, payload = 500, {"ok": False, "error": "Internal Server Error"}
+        self._send_json(status_code, payload)
+
+    def _handle_cron(self, query_string: str) -> None:
+        try:
+            status_code, payload = process_cron_request(query_string, self.headers)
+        except Exception:
+            logger.exception("Lỗi không mong muốn khi xử lý /api/cron.")
             status_code, payload = 500, {"ok": False, "error": "Internal Server Error"}
         self._send_json(status_code, payload)
 
@@ -58,7 +81,11 @@ def main() -> None:
     host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", "8000"))
     server = ThreadingHTTPServer((host, port), WebhookHTTPHandler)
-    logger.info("Webhook server đang lắng nghe tại http://%s:%d/api/webhook", host, port)
+    logger.info(
+        "Webhook & Cron server đang lắng nghe tại http://%s:%d (/api/webhook, /api/cron)",
+        host,
+        port,
+    )
     try:
         server.serve_forever()
     except KeyboardInterrupt:

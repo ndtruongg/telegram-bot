@@ -90,7 +90,10 @@ def main() -> None:
         ok = telegram.set_my_commands(router.get_telegram_commands()) and ok
         sys.exit(0 if ok else 1)
 
-    state_store = StateStore(args.state_file or settings.state_file)
+    state_store = StateStore(
+        args.state_file or settings.state_file,
+        initial_json=settings.bot_state_json,
+    )
 
     selected = set(args.features or [])
     loaded_features = load_features(
