@@ -29,6 +29,8 @@ logger = logging.getLogger(__name__)
 
 _TELEGRAM_MAX_LEN = 4096
 _MAX_GITHUB_VAR_BYTES = 45000
+_SECTION_DIVIDER = "───────────────"
+_WEEKDAY_SHORT_VI: tuple[str, ...] = ("T2", "T3", "T4", "T5", "T6", "T7", "CN")
 
 
 class RemindersFeature(BaseFeature):
@@ -282,27 +284,48 @@ class RemindersFeature(BaseFeature):
         days_left = (occ_date - today).days
         time_part = f" lúc <b>{new_item.event_time}</b>" if new_item.event_time else ""
         repeat_label = REPEAT_LABELS_VI.get(new_item.repeat, "Một lần")
-
-        return (
-            f"✅ <b>Đã thêm nhắc việc #{new_item.id}!</b>\n\n"
-            f"📌 Nội dung: <b>{html.escape(new_item.title)}</b>\n"
-            f"📅 Thời điểm: <b>{format_date_vi(occ_date, include_weekday=True)}</b>{time_part}\n"
-            f"🔁 Lặp lại: <b>{repeat_label}</b>\n"
-            f"⏳ Đếm ngược: <b>{format_countdown_badge(days_left)}</b>\n"
-            f"💾 Lưu tại: {sync_msg}"
+        lead_line = (
+            "<i>Đã qua hạn (không tự nhắc)</i>"
+            if days_left < 0
+            else self._format_lead_schedule(new_item, self._config.lead_days)
         )
+
+        lines = [
+            f"✅ <b>Đã thêm nhắc việc #{new_item.id}</b>",
+            f"<i>{format_countdown_badge(days_left)}</i>",
+            "",
+            _SECTION_DIVIDER,
+            f"📌 <b>{html.escape(new_item.title)}</b>",
+            f"• Thời điểm: <b>{format_date_vi(occ_date, include_weekday=True)}</b>{time_part}",
+            f"• Lặp lại: <b>{repeat_label}</b>",
+            f"• Mốc nhắc: {lead_line}",
+            "",
+            _SECTION_DIVIDER,
+            f"<i>💾 {sync_msg}</i>",
+            f"<i>Gõ /remind_list để xem danh sách • /remind_del {new_item.id} để xoá</i>",
+        ]
+        return "\n".join(lines)
 
     def _cmd_remind_list(self, _ctx: CommandContext) -> str:
         now = self._now_provider(self._get_timezone())
         today = now.date()
         items = self.get_reminders(refresh_from_github=True)
+        today_label = format_date_vi(today, include_weekday=True)
 
         if not items:
-            return (
-                "📋 <b>DANH SÁCH NHẮC VIỆC</b>\n\n"
-                "Chưa có nhắc việc hay sự kiện nào.\n"
-                "Thêm mới bằng lệnh:\n"
-                "<code>/remind_add 25/12 Giáng sinh #yearly</code>"
+            return "\n".join(
+                [
+                    "📋 <b>DANH SÁCH NHẮC VIỆC</b>",
+                    f"<i>{today_label} • Chưa có mục nào</i>",
+                    "",
+                    _SECTION_DIVIDER,
+                    "<i>Hiện chưa có nhắc việc hay sự kiện nào.</i>",
+                    "",
+                    "<b>Ví dụ thêm nhanh:</b>",
+                    "• <code>/remind_add 25/12 Giáng sinh #yearly</code>",
+                    "• <code>/remind_add ngaymai 09:30 Họp dự án</code>",
+                    "• <code>/remind_add +3d Nộp báo cáo</code>",
+                ]
             )
 
         upcoming: list[tuple[int, ReminderItem, date]] = []
@@ -318,21 +341,35 @@ class RemindersFeature(BaseFeature):
         upcoming.sort(key=lambda e: (e[0], e[1].event_time or "99:99", e[1].id))
         expired.sort(key=lambda e: (-e[0], e[1].id))
 
-        lines = [f"📋 <b>DANH SÁCH NHẮC VIỆC ({len(items)})</b>", ""]
+        summary_parts: list[str] = [today_label]
+        if upcoming:
+            summary_parts.append(f"{len(upcoming)} sắp tới")
+        if expired:
+            summary_parts.append(f"{len(expired)} đã qua hạn")
+
+        lines = [
+            "📋 <b>DANH SÁCH NHẮC VIỆC</b>",
+            f"<i>{' • '.join(summary_parts)}</i>",
+        ]
 
         if upcoming:
-            lines.append("<b>📅 Sắp tới:</b>")
-            for days_left, item, occ in upcoming:
-                lines.append(self._format_list_line(item, occ, days_left))
+            lines.extend(["", _SECTION_DIVIDER, f"📌 <b>Sắp tới ({len(upcoming)})</b>", ""])
+            for idx, (days_left, item, occ) in enumerate(upcoming):
+                lines.append(self._format_list_line(item, occ, days_left, today=today))
+                if idx < len(upcoming) - 1:
+                    lines.append("")
 
         if expired:
-            if upcoming:
-                lines.append("")
-            lines.append("<b>⌛ Đã qua hạn:</b>")
+            lines.extend(["", _SECTION_DIVIDER, f"⌛ <b>Đã qua hạn ({len(expired)})</b>", ""])
             for days_left, item, occ in expired:
-                lines.append(self._format_list_line(item, occ, days_left))
-            lines.append("<i>Gõ <code>/remind_del expired</code> để dọn mục đã qua hạn.</i>")
+                lines.append(self._format_expired_line(item, occ, days_left, today=today))
 
+        footer_hint = (
+            "Gõ /remind_del &lt;ID&gt; để xoá • /remind_del expired để dọn mục cũ"
+            if expired
+            else "Gõ /remind_add để thêm • /remind_del &lt;ID&gt; để xoá"
+        )
+        lines.extend(["", _SECTION_DIVIDER, f"<i>{footer_hint}</i>"])
         return self._truncate_message(lines)
 
     def _cmd_countdown(self, _ctx: CommandContext) -> str:
@@ -470,15 +507,68 @@ class RemindersFeature(BaseFeature):
         )
 
     @staticmethod
-    def _format_list_line(item: ReminderItem, occ: date, days_left: int) -> str:
-        time_str = f" {item.event_time}" if item.event_time else ""
-        repeat_str = (
-            f" • 🔁 {REPEAT_LABELS_VI[item.repeat]}" if item.repeat != "none" else ""
-        )
-        badge = format_countdown_badge(days_left)
+    def _format_short_date(target_date: date, today: date | None = None) -> str:
+        weekday = _WEEKDAY_SHORT_VI[target_date.weekday()]
+        if today is not None and target_date.year == today.year:
+            date_part = target_date.strftime("%d/%m")
+        else:
+            date_part = target_date.strftime("%d/%m/%Y")
+        return f"{weekday}, {date_part}"
+
+    @staticmethod
+    def _format_lead_schedule(item: ReminderItem, default_lead_days: tuple[int, ...]) -> str:
+        effective = sorted(item.effective_lead_days(default_lead_days), reverse=True)
+        advance_days = [d for d in effective if d > 0]
+        if advance_days:
+            days_csv = ", ".join(str(d) for d in advance_days)
+            base = f"Trước <b>{days_csv}</b> ngày &amp; <b>đúng ngày</b>"
+        else:
+            base = "<b>Đúng ngày</b>"
+        if item.event_time:
+            return f"{base} • báo lúc <b>{item.event_time}</b>"
+        return base
+
+    @classmethod
+    def _format_list_line(
+        cls,
+        item: ReminderItem,
+        occ: date,
+        days_left: int,
+        *,
+        today: date | None = None,
+    ) -> str:
+        if days_left == 0:
+            icon, status_label = "🔥", "<b>Hôm nay</b>"
+        elif days_left == 1:
+            icon, status_label = "⏰", "<b>Ngày mai</b>"
+        else:
+            icon, status_label = "⏳", f"<b>Còn {days_left} ngày</b>"
+
+        meta_parts = [status_label, cls._format_short_date(occ, today)]
+        if item.event_time:
+            meta_parts.append(f"<b>{item.event_time}</b>")
+        if item.repeat != "none":
+            meta_parts.append(f"🔁 {REPEAT_LABELS_VI[item.repeat]}")
+
         return (
-            f"<code>#{item.id}</code> <b>{html.escape(item.title)}</b>\n"
-            f"  📅 {format_date_vi(occ)}{time_str} — {badge}{repeat_str}"
+            f"{icon} <b>{html.escape(item.title)}</b> (<code>#{item.id}</code>)\n"
+            f"• {' • '.join(meta_parts)}"
+        )
+
+    @classmethod
+    def _format_expired_line(
+        cls,
+        item: ReminderItem,
+        occ: date,
+        days_left: int,
+        *,
+        today: date | None = None,
+    ) -> str:
+        date_str = cls._format_short_date(occ, today)
+        time_str = f" {item.event_time}" if item.event_time else ""
+        return (
+            f"• <b>{html.escape(item.title)}</b> (<code>#{item.id}</code>) — "
+            f"<i>Đã qua {abs(days_left)} ngày ({date_str}{time_str})</i>"
         )
 
     @staticmethod
@@ -534,5 +624,8 @@ class RemindersFeature(BaseFeature):
             current_len += added_len
 
         if truncated:
-            output.append("\n<i>… (đã rút gọn do vượt giới hạn ký tự Telegram)</i>")
+            while output and (not output[-1] or output[-1] == _SECTION_DIVIDER):
+                output.pop()
+            output.append("")
+            output.append("<i>… (đã rút gọn do vượt giới hạn ký tự Telegram)</i>")
         return "\n".join(output).strip()

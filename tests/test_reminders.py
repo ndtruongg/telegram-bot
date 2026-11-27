@@ -326,6 +326,8 @@ class TestRemindersFeature(unittest.TestCase):
         self.assertIn("Đã thêm nhắc việc #1", res_add1[1])
         self.assertIn("Còn 28 ngày", res_add1[1])
         self.assertIn("Hằng năm", res_add1[1])
+        self.assertIn("Trước <b>7, 3, 1</b> ngày &amp; <b>đúng ngày</b>", res_add1[1])
+        self.assertIn("───────────────", res_add1[1])
         self.assertIn("REMINDERS_DATA", stored)
 
         # /remind_add #2 (timed tomorrow)
@@ -337,6 +339,7 @@ class TestRemindersFeature(unittest.TestCase):
         self.assertIn("#2", res_add2[1])
         self.assertIn("14:30", res_add2[1])
         self.assertIn("Họp &amp; Review", res_add2[1])
+        self.assertIn("báo lúc <b>14:30</b>", res_add2[1])
 
         # /remind_add #3 (past non-repeating event for testing expired cleanup)
         res_add3 = router.handle_update(
@@ -345,14 +348,17 @@ class TestRemindersFeature(unittest.TestCase):
         )
         assert res_add3 is not None
         self.assertIn("#3", res_add3[1])
+        self.assertIn("Đã qua hạn", res_add3[1])
 
-        # /remind_list shows both upcoming and expired sections
+        # /remind_list shows both upcoming and expired sections with clean formatting
         res_list = router.handle_update(self._make_update("/remind_list"), allowed_chat_id="123")
         assert res_list is not None
-        self.assertIn("Sắp tới", res_list[1])
-        self.assertIn("Đã qua hạn", res_list[1])
+        self.assertIn("Sắp tới (2)", res_list[1])
+        self.assertIn("Đã qua hạn (1)", res_list[1])
         self.assertIn("Giáng sinh", res_list[1])
         self.assertIn("Việc cũ", res_list[1])
+        self.assertIn("───────────────", res_list[1])
+        self.assertIn("/remind_del expired", res_list[1])
 
         # /countdown only shows upcoming events sorted by soonest first
         res_cd = router.handle_update(self._make_update("/countdown"), allowed_chat_id="123")
