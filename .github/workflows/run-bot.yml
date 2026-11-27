@@ -61,6 +61,12 @@ jobs:
           NEWS_MAX_ARTICLES: ${{ vars.NEWS_MAX_ARTICLES }}
           NEWS_MAX_HIGHLIGHTS: ${{ vars.NEWS_MAX_HIGHLIGHTS }}
           GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
+          REMINDERS_ENABLED: ${{ vars.REMINDERS_ENABLED }}
+          REMINDERS_SEND_HOUR: ${{ vars.REMINDERS_SEND_HOUR }}
+          REMINDERS_SEND_MINUTE: ${{ vars.REMINDERS_SEND_MINUTE }}
+          REMINDERS_TIMEZONE: ${{ vars.REMINDERS_TIMEZONE }}
+          REMINDERS_LEAD_DAYS: ${{ vars.REMINDERS_LEAD_DAYS }}
+          REMINDERS_DATA: ${{ vars.REMINDERS_DATA }}
           STATE_FILE: .bot_state.json
           INPUT_FEATURE: ${{ inputs.feature }}
         run: |

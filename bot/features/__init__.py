@@ -9,6 +9,7 @@ from bot.core.state import StateStore
 from bot.core.telegram_client import TelegramClient
 from bot.features.gold_price import GoldPriceFeature
 from bot.features.morning_news import MorningNewsFeature
+from bot.features.reminders import RemindersFeature
 
 
 def load_features(
@@ -40,6 +41,16 @@ def load_features(
                 telegram=telegram,
                 config=settings.morning_news,
                 state_store=state_store,
+            )
+        )
+
+    if settings.reminders.enabled or include_disabled:
+        features.append(
+            RemindersFeature(
+                telegram=telegram,
+                config=settings.reminders,
+                state_store=state_store,
+                github_vars=github_vars,
             )
         )
 

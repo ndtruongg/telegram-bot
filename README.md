@@ -33,10 +33,14 @@ Bot Telegram được tổ chức theo kiến trúc module hóa, mỗi tính nă
 │   │   ├── gold_price/             # Tính năng theo dõi giá vàng SJC
 │   │   │   ├── scraper.py          # Cào và phân tích dữ liệu HTML
 │   │   │   └── feature.py          # Logic kiểm tra ngưỡng giá & gửi cảnh báo
-│   │   └── morning_news/           # Tính năng tóm tắt tin tức buổi sáng
-│   │       ├── rss.py              # Lấy và gộp tin RSS (VnExpress, Tuổi Trẻ)
-│   │       ├── summarizer.py       # Tóm tắt tin bằng Gemini AI (kèm dự phòng RSS)
-│   │       └── feature.py          # Lập lịch gửi 07:00 sáng & lệnh /news_*
+│   │   ├── morning_news/           # Tính năng tóm tắt tin tức buổi sáng
+│   │   │   ├── rss.py              # Lấy và gộp tin RSS (VnExpress, Tuổi Trẻ)
+│   │   │   ├── summarizer.py       # Tóm tắt tin bằng Gemini AI (kèm dự phòng RSS)
+│   │   │   └── feature.py          # Lập lịch gửi 07:00 sáng & lệnh /news_*
+│   │   └── reminders/              # Tính năng nhắc việc & đếm ngược sự kiện
+│   │       ├── models.py           # Mô hình sự kiện, tính lặp lại & JSON
+│   │       ├── parser.py           # Parse ngày/giờ linh hoạt (DD/MM, +3d, ngaymai...)
+│   │       └── feature.py          # Lập lịch nhắc tự động & lệnh /remind_*, /countdown
 │   └── utils/                      # Hàm tiện ích dùng chung
 │       └── parsers.py              # Parse & format giá tiền
 └── tests/
@@ -101,6 +105,10 @@ Repo đã có sẵn workflow [.github/workflows/run-bot.yml](.github/workflows/r
    - `NEWS_RSS_URLS` (mặc định `https://vnexpress.net/rss/tin-noi-bat.rss,https://tuoitre.vn/rss/tin-moi-nhat.rss`)
    - `NEWS_SEND_HOUR` / `NEWS_SEND_MINUTE` (mặc định `7` / `0` theo `Asia/Ho_Chi_Minh`)
    - `GEMINI_MODEL` (mặc định `gemini-2.5-flash`)
+   - `REMINDERS_ENABLED` (mặc định `true`)
+   - `REMINDERS_SEND_HOUR` / `REMINDERS_SEND_MINUTE` (mặc định `7` / `0` theo `Asia/Ho_Chi_Minh`)
+   - `REMINDERS_LEAD_DAYS` (mặc định `7,3,1,0` — nhắc trước 7, 3, 1 ngày và đúng ngày)
+   - `REMINDERS_DATA` *(tự động tạo/cập nhật khi bạn thêm/xoá bằng lệnh `/remind_add`, `/remind_del`)*
    - `LOG_LEVEL` (mặc định `INFO`)
 4. Vào tab **Actions → Run Telegram Bot Hourly → Run workflow** để chạy thử ngay.
 
@@ -113,6 +121,11 @@ Bot hỗ trợ các lệnh phản hồi tức thì qua Webhook (Telegram chỉ c
 - `/gold_status`: Xem mức giá mục tiêu hiện tại đang đồng bộ.
 - `/news_now`: Lấy và tóm tắt tin tức nổi bật ngay lập tức.
 - `/news_status`: Xem giờ gửi bản tin sáng, danh sách RSS và trạng thái Gemini AI.
+- `/remind_add <ngày> [giờ] <nội dung> [#yearly|#monthly|#weekly|#daily]`: Thêm nhắc việc hoặc sự kiện đếm ngược (hỗ trợ `25/12`, `25/12/2026`, `2026-12-25`, `homnay`, `ngaymai`, `+3d`, `+2w`, giờ `09:30` hoặc `9h30`).
+- `/remind_list`: Xem toàn bộ danh sách nhắc việc & đếm ngược.
+- `/countdown`: Xem nhanh đếm ngược các sự kiện sắp tới.
+- `/remind_del <ID | expired>`: Xoá nhắc việc theo ID (hoặc `expired` để dọn toàn bộ mục đã qua hạn).
+- `/remind_status`: Xem trạng thái tính năng nhắc việc & nguồn đồng bộ.
 
 ### Cách triển khai Webhook (khuyến nghị Vercel — miễn phí)
 

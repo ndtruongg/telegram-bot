@@ -11,6 +11,8 @@ DEFAULT_NEWS_RSS_URLS: tuple[str, ...] = (
     "https://tuoitre.vn/rss/tin-moi-nhat.rss",
 )
 
+DEFAULT_REMINDER_LEAD_DAYS: tuple[int, ...] = (7, 3, 1, 0)
+
 
 def _load_dotenv(env_path: Path) -> None:
     """Load key=value pairs from a .env file into os.environ (without overwriting existing vars)."""
@@ -39,6 +41,27 @@ def _env_bool(key: str, default: bool) -> bool:
     return raw in {"1", "true", "yes", "on"}
 
 
+def _parse_lead_days(raw: str, default: tuple[int, ...] = DEFAULT_REMINDER_LEAD_DAYS) -> tuple[int, ...]:
+    text = raw.strip()
+    if not text:
+        return default
+    days: set[int] = set()
+    for part in text.split(","):
+        cleaned = part.strip()
+        if not cleaned:
+            continue
+        try:
+            val = int(cleaned)
+        except ValueError:
+            continue
+        if 0 <= val <= 365:
+            days.add(val)
+    if not days:
+        return default
+    days.add(0)
+    return tuple(sorted(days, reverse=True))
+
+
 @dataclass(frozen=True)
 class GoldPriceConfig:
     enabled: bool
@@ -62,12 +85,24 @@ class MorningNewsConfig:
 
 
 @dataclass(frozen=True)
+class RemindersConfig:
+    enabled: bool = True
+    send_hour: int = 7
+    send_minute: int = 0
+    timezone: str = "Asia/Ho_Chi_Minh"
+    lead_days: tuple[int, ...] = DEFAULT_REMINDER_LEAD_DAYS
+    check_interval: int = 900
+    reminders_json: str = ""
+
+
+@dataclass(frozen=True)
 class Settings:
     telegram_token: str
     telegram_chat_id: str
     log_level: str
     gold_price: GoldPriceConfig
     morning_news: MorningNewsConfig = field(default_factory=MorningNewsConfig)
+    reminders: RemindersConfig = field(default_factory=RemindersConfig)
     state_file: str = ".bot_state.json"
     telegram_webhook_secret: str = ""
     github_token: str = ""
@@ -102,6 +137,11 @@ class Settings:
         news_max_highlights = max(1, int(_env("NEWS_MAX_HIGHLIGHTS", "12")))
         news_check_interval = max(60, int(_env("NEWS_CHECK_INTERVAL", "900")))
 
+        reminders_send_hour = max(0, min(23, int(_env("REMINDERS_SEND_HOUR", "7"))))
+        reminders_send_minute = max(0, min(59, int(_env("REMINDERS_SEND_MINUTE", "0"))))
+        reminders_check_interval = max(60, int(_env("REMINDERS_CHECK_INTERVAL", "900")))
+        reminders_lead_days = _parse_lead_days(_env("REMINDERS_LEAD_DAYS", ""))
+
         return cls(
             telegram_token=token,
             telegram_chat_id=chat_id,
@@ -123,6 +163,15 @@ class Settings:
                 check_interval=news_check_interval,
                 gemini_api_key=os.getenv("GEMINI_API_KEY", "").strip(),
                 gemini_model=_env("GEMINI_MODEL", "gemini-2.5-flash"),
+            ),
+            reminders=RemindersConfig(
+                enabled=_env_bool("REMINDERS_ENABLED", True),
+                send_hour=reminders_send_hour,
+                send_minute=reminders_send_minute,
+                timezone=_env("REMINDERS_TIMEZONE", "Asia/Ho_Chi_Minh"),
+                lead_days=reminders_lead_days,
+                check_interval=reminders_check_interval,
+                reminders_json=os.getenv("REMINDERS_DATA", "").strip(),
             ),
             state_file=state_file,
             telegram_webhook_secret=os.getenv("TELEGRAM_WEBHOOK_SECRET", "").strip(),
