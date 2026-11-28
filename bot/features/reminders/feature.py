@@ -376,6 +376,7 @@ class RemindersFeature(BaseFeature):
         now = self._now_provider(self._get_timezone())
         today = now.date()
         items = self.get_reminders(refresh_from_github=True)
+        today_label = format_date_vi(today, include_weekday=True)
 
         upcoming: list[tuple[int, ReminderItem, date]] = []
         for item in items:
@@ -385,29 +386,40 @@ class RemindersFeature(BaseFeature):
                 upcoming.append((days_left, item, occ))
 
         if not upcoming:
-            return (
-                "⏳ <b>ĐẾM NGƯỢC SỰ KIỆN</b>\n\n"
-                "Hiện chưa có sự kiện nào sắp diễn ra.\n"
-                "Thêm sự kiện bằng lệnh:\n"
-                "<code>/remind_add 25/12 Giáng sinh #yearly</code>"
+            return "\n".join(
+                [
+                    "⏳ <b>ĐẾM NGƯỢC SỰ KIỆN</b>",
+                    f"<i>{today_label} • Chưa có sự kiện nào</i>",
+                    "",
+                    _SECTION_DIVIDER,
+                    "<i>Hiện chưa có sự kiện nào sắp diễn ra.</i>",
+                    "",
+                    "<b>Ví dụ thêm nhanh:</b>",
+                    "• <code>/remind_add 25/12 Giáng sinh #yearly</code>",
+                    "• <code>/remind_add +7d Nộp báo cáo</code>",
+                ]
             )
 
         upcoming.sort(key=lambda e: (e[0], e[1].event_time or "99:99", e[1].id))
-        lines = [f"⏳ <b>ĐẾM NGƯỢC SỰ KIỆN — {format_date_vi(today)}</b>", ""]
+        lines = [
+            "⏳ <b>ĐẾM NGƯỢC SỰ KIỆN</b>",
+            f"<i>{today_label} • {len(upcoming)} sự kiện sắp tới</i>",
+            "",
+            _SECTION_DIVIDER,
+        ]
 
-        for days_left, item, occ in upcoming:
-            badge = format_countdown_badge(days_left)
-            time_str = f" • {item.event_time}" if item.event_time else ""
-            repeat_str = (
-                f" • 🔁 {REPEAT_LABELS_VI[item.repeat]}"
-                if item.repeat != "none"
-                else ""
-            )
-            lines.append(
-                f"• <b>{html.escape(item.title)}</b> (<code>#{item.id}</code>)\n"
-                f"  {badge} — {format_date_vi(occ, include_weekday=True)}{time_str}{repeat_str}"
-            )
+        for idx, (days_left, item, occ) in enumerate(upcoming):
+            lines.append(self._format_list_line(item, occ, days_left, today=today))
+            if idx < len(upcoming) - 1:
+                lines.append("")
 
+        lines.extend(
+            [
+                "",
+                _SECTION_DIVIDER,
+                "<i>Gõ /remind_list để xem toàn bộ • /remind_add để thêm mới</i>",
+            ]
+        )
         return self._truncate_message(lines)
 
     def _cmd_remind_del(self, ctx: CommandContext) -> str:
@@ -432,11 +444,27 @@ class RemindersFeature(BaseFeature):
             ok, sync_msg = self._persist_reminders(remaining)
             if not ok:
                 return sync_msg
-            return (
-                f"🗑️ <b>Đã dọn {len(removed)} nhắc việc đã qua hạn!</b>\n"
-                f"Còn lại: <b>{len(remaining)}</b> mục.\n"
-                f"💾 Lưu tại: {sync_msg}"
+            lines = [
+                f"🗑️ <b>Đã dọn {len(removed)} nhắc việc đã qua hạn</b>",
+                f"<i>Còn lại {len(remaining)} mục trong danh sách</i>",
+                "",
+                _SECTION_DIVIDER,
+            ]
+            for item in removed:
+                occ = item.next_occurrence(today)
+                lines.append(
+                    f"• <b>{html.escape(item.title)}</b> (<code>#{item.id}</code>) — "
+                    f"<i>{self._format_short_date(occ, today)}</i>"
+                )
+            lines.extend(
+                [
+                    "",
+                    _SECTION_DIVIDER,
+                    f"<i>💾 {sync_msg}</i>",
+                    "<i>Gõ /remind_list để xem các mục còn lại</i>",
+                ]
             )
+            return self._truncate_message(lines)
 
         target_ids: set[int] = set()
         for tok in ctx.args.replace(",", " ").split():
@@ -464,14 +492,28 @@ class RemindersFeature(BaseFeature):
         if not ok:
             return sync_msg
 
-        removed_lines = "\n".join(
-            f"• <code>#{item.id}</code> {html.escape(item.title)}" for item in removed_items
+        lines = [
+            f"🗑️ <b>Đã xoá {len(removed_items)} nhắc việc</b>",
+            f"<i>Còn lại {len(remaining)} mục trong danh sách</i>",
+            "",
+            _SECTION_DIVIDER,
+        ]
+        for item in removed_items:
+            occ = item.next_occurrence(today)
+            time_str = f" {item.event_time}" if item.event_time else ""
+            lines.append(
+                f"• <b>{html.escape(item.title)}</b> (<code>#{item.id}</code>) — "
+                f"<i>{self._format_short_date(occ, today)}{time_str}</i>"
+            )
+        lines.extend(
+            [
+                "",
+                _SECTION_DIVIDER,
+                f"<i>💾 {sync_msg}</i>",
+                "<i>Gõ /remind_list để xem các mục còn lại</i>",
+            ]
         )
-        return (
-            f"🗑️ <b>Đã xoá {len(removed_items)} nhắc việc:</b>\n"
-            f"{removed_lines}\n\n"
-            f"💾 Lưu tại: {sync_msg}"
-        )
+        return self._truncate_message(lines)
 
     def _cmd_remind_status(self, _ctx: CommandContext) -> str:
         now = self._now_provider(self._get_timezone())
@@ -571,44 +613,86 @@ class RemindersFeature(BaseFeature):
             f"<i>Đã qua {abs(days_left)} ngày ({date_str}{time_str})</i>"
         )
 
-    @staticmethod
+    @classmethod
+    def _format_timed_alert_item(cls, item: ReminderItem) -> str:
+        meta_parts = [f"Lúc <b>{item.event_time}</b>"]
+        if item.repeat != "none":
+            meta_parts.append(f"🔁 {REPEAT_LABELS_VI[item.repeat]}")
+        return (
+            f"🔔 <b>{html.escape(item.title)}</b> (<code>#{item.id}</code>)\n"
+            f"• {' • '.join(meta_parts)}"
+        )
+
+    @classmethod
     def _format_alert_message(
+        cls,
         now: datetime,
         due_timed: list[tuple[ReminderItem, date, str]],
         upcoming_alerts: list[tuple[int, ReminderItem, date, str]],
     ) -> str:
-        lines = [f"🔔 <b>NHẮC VIỆC & ĐẾM NGƯỢC — {format_date_vi(now.date())}</b>", ""]
+        today = now.date()
+        today_label = format_date_vi(today, include_weekday=True)
+
+        # Focused single-purpose alert when only exact-time reminder(s) are firing
+        if due_timed and not upcoming_alerts:
+            lines = [
+                "⏰ <b>ĐẾN GIỜ NHẮC VIỆC</b>",
+                f"<i>{today_label} • {now.strftime('%H:%M')}</i>",
+                "",
+                _SECTION_DIVIDER,
+            ]
+            for idx, (item, _occ, _) in enumerate(due_timed):
+                lines.append(cls._format_timed_alert_item(item))
+                if idx < len(due_timed) - 1:
+                    lines.append("")
+
+            del_hint = (
+                f"/remind_del {due_timed[0][0].id}"
+                if len(due_timed) == 1
+                else "/remind_del &lt;ID&gt;"
+            )
+            lines.extend(
+                [
+                    "",
+                    _SECTION_DIVIDER,
+                    f"<i>Gõ /remind_list để xem danh sách • {del_hint} để xoá</i>",
+                ]
+            )
+            return cls._truncate_message(lines)
+
+        subtitle_parts = [today_label]
+        if due_timed:
+            subtitle_parts.append(f"{len(due_timed)} đến giờ")
+        if upcoming_alerts:
+            subtitle_parts.append(f"{len(upcoming_alerts)} sắp tới")
+
+        lines = [
+            "🔔 <b>NHẮC VIỆC &amp; ĐẾM NGƯỢC</b>",
+            f"<i>{' • '.join(subtitle_parts)}</i>",
+        ]
 
         if due_timed:
-            lines.append("⏰ <b>ĐẾN GIỜ NHẮC VIỆC:</b>")
-            for item, occ, _ in due_timed:
-                repeat_str = (
-                    f" (🔁 {REPEAT_LABELS_VI[item.repeat]})"
-                    if item.repeat != "none"
-                    else ""
-                )
-                lines.append(
-                    f"• <b>{item.event_time}</b> — <b>{html.escape(item.title)}</b>"
-                    f"{repeat_str} (<code>#{item.id}</code>)"
-                )
-            lines.append("")
+            lines.extend(["", _SECTION_DIVIDER, "⏰ <b>ĐẾN GIỜ NHẮC VIỆC</b>", ""])
+            for idx, (item, _occ, _) in enumerate(due_timed):
+                lines.append(cls._format_timed_alert_item(item))
+                if idx < len(due_timed) - 1:
+                    lines.append("")
 
         if upcoming_alerts:
-            lines.append("📅 <b>SỰ KIỆN SẮP TỚI:</b>")
-            for days_left, item, occ, _ in upcoming_alerts:
-                badge = format_countdown_badge(days_left)
-                time_str = f" lúc {item.event_time}" if item.event_time else ""
-                repeat_str = (
-                    f" • 🔁 {REPEAT_LABELS_VI[item.repeat]}"
-                    if item.repeat != "none"
-                    else ""
-                )
-                lines.append(
-                    f"• <b>{html.escape(item.title)}</b> (<code>#{item.id}</code>)\n"
-                    f"  {badge} — {format_date_vi(occ, include_weekday=True)}{time_str}{repeat_str}"
-                )
+            lines.extend(["", _SECTION_DIVIDER, "📌 <b>SỰ KIỆN SẮP TỚI</b>", ""])
+            for idx, (days_left, item, occ, _) in enumerate(upcoming_alerts):
+                lines.append(cls._format_list_line(item, occ, days_left, today=today))
+                if idx < len(upcoming_alerts) - 1:
+                    lines.append("")
 
-        return RemindersFeature._truncate_message(lines)
+        lines.extend(
+            [
+                "",
+                _SECTION_DIVIDER,
+                "<i>Gõ /remind_list để xem tất cả • /countdown để xem đếm ngược</i>",
+            ]
+        )
+        return cls._truncate_message(lines)
 
     @staticmethod
     def _truncate_message(lines: list[str]) -> str:

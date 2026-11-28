@@ -364,6 +364,8 @@ class TestRemindersFeature(unittest.TestCase):
         res_cd = router.handle_update(self._make_update("/countdown"), allowed_chat_id="123")
         assert res_cd is not None
         self.assertIn("ĐẾM NGƯỢC SỰ KIỆN", res_cd[1])
+        self.assertIn("2 sự kiện sắp tới", res_cd[1])
+        self.assertIn("───────────────", res_cd[1])
         self.assertNotIn("Việc cũ", res_cd[1])
         self.assertLess(res_cd[1].index("Họp &amp; Review"), res_cd[1].index("Giáng sinh"))
 
@@ -381,12 +383,18 @@ class TestRemindersFeature(unittest.TestCase):
         )
         assert res_clean is not None
         self.assertIn("Đã dọn 1 nhắc việc", res_clean[1])
+        self.assertIn("Việc cũ", res_clean[1])
+        self.assertIn("Còn lại 2 mục", res_clean[1])
+        self.assertIn("───────────────", res_clean[1])
         self.assertEqual([i.id for i in deserialize_reminders(stored["REMINDERS_DATA"])], [1, 2])
 
         # /remind_del 1 removes item #1
         res_del = router.handle_update(self._make_update("/remind_del 1"), allowed_chat_id="123")
         assert res_del is not None
         self.assertIn("Đã xoá 1 nhắc việc", res_del[1])
+        self.assertIn("Giáng sinh", res_del[1])
+        self.assertIn("Còn lại 1 mục", res_del[1])
+        self.assertIn("───────────────", res_del[1])
         self.assertEqual([i.id for i in deserialize_reminders(stored["REMINDERS_DATA"])], [2])
 
     def test_settings_and_command_router_integration(self) -> None:
